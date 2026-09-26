@@ -19,6 +19,18 @@ Release
 
 Double click on the JTempestSDR.jar file to launch. If it fails to launch, you will need to recompile the project.
 
+### Video display controls
+
+The video preview can be moved into an undecorated full-screen display. Use any
+of the following to toggle it:
+
+ * Double-click the video preview.
+ * Select **Tweaks → Fullscreen video (F11)**.
+ * Press **F11** while the application or video preview has focus.
+
+Press **Escape** to return to the normal window. Fullscreen mode enlarges the
+video preview; the control panel remains in the main application window.
+
 
 Building the executable
 ------------
@@ -124,6 +136,8 @@ device module, and the device vendor API. For an RSP1A, install SDRplay API v3
 and SoapySDRPlay3, then enter `driver=sdrplay` in the SoapySDR source settings.
 The plugin requests a receive bandwidth matching the selected sample rate; this
 is important because the SDRplay module otherwise defaults to a 200 kHz filter.
+For 1920x1200 displays, the GUI also provides a reduced-blanking mode
+(`1920x1200 @ 60Hz (reduced blanking)`) using 2080x1235 total timing.
 
 Build the native plugin with:
 

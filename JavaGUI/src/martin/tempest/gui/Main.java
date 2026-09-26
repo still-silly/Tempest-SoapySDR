@@ -10,6 +10,7 @@
  ******************************************************************************/
 package martin.tempest.gui;
 
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.Graphics2D;
@@ -107,6 +108,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	
 	private JFrame frmTempestSdr;
 	private JFrame fullscreenframe;
+	private JCheckBoxMenuItem fullscreenVideoItem;
 	private JDialog deviceframe;
 	private JSpinner spWidth;
 	private JSpinner spHeight;
@@ -223,19 +225,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 			@Override
 			public void mouseClicked(MouseEvent e) {
 				if (e.getClickCount() == 2) {
-					if (fullscreenframe.isVisible()) {
-						fullscreenframe.remove(visualizer);
-						visualizer.setBounds(visualizer_bounds);
-						frmTempestSdr.getContentPane().add(visualizer);
-						fullscreenframe.setVisible(false);
-						frmTempestSdr.requestFocus();
-					} else {
-						visualizer_bounds = visualizer.getBounds();
-						frmTempestSdr.remove(visualizer);
-						fullscreenframe.getContentPane().add(visualizer);
-						fullscreenframe.setVisible(true);
-						visualizer.requestFocus();
-					}
+					setVideoFullscreen(fullscreenframe == null || !fullscreenframe.isVisible());
 				} else
 					visualizer.requestFocus();
 				
@@ -315,6 +305,16 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 		
 		mnTweaks = new JMenu("Tweaks");
 		menuBar.add(mnTweaks);
+
+		fullscreenVideoItem = new JCheckBoxMenuItem("Fullscreen video (F11)");
+		fullscreenVideoItem.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				setVideoFullscreen(fullscreenVideoItem.isSelected());
+			}
+		});
+		mnTweaks.add(fullscreenVideoItem);
+		mnTweaks.addSeparator();
 		
 		mntmTakeSnapshot = new JMenuItem("Take snapshot");
 		mntmTakeSnapshot.addActionListener(new ActionListener() {
@@ -938,6 +938,15 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private void onKeyboardKeyPressed(final KeyEvent e) {
 		final int keycode = e.getKeyCode();
 
+		if (keycode == KeyEvent.VK_F11) {
+			setVideoFullscreen(fullscreenframe == null || !fullscreenframe.isVisible());
+			return;
+		}
+		if (keycode == KeyEvent.VK_ESCAPE && fullscreenframe != null && fullscreenframe.isVisible()) {
+			setVideoFullscreen(false);
+			return;
+		}
+
 		if (e.isShiftDown()) {
 			switch (keycode) {
 			case KeyEvent.VK_LEFT:
@@ -973,6 +982,39 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 				break;
 			}
 		}
+	}
+
+	/** Move the video view between the main window and an undecorated full-screen window. */
+	private void setVideoFullscreen(final boolean fullscreen) {
+		if (fullscreenframe == null || visualizer == null)
+			return;
+
+		if (fullscreen) {
+			if (fullscreenframe.isVisible())
+				return;
+
+			visualizer_bounds = visualizer.getBounds();
+			frmTempestSdr.getContentPane().remove(visualizer);
+			fullscreenframe.getContentPane().add(visualizer, BorderLayout.CENTER);
+			fullscreenframe.validate();
+			fullscreenframe.setVisible(true);
+			visualizer.requestFocusInWindow();
+		} else {
+			if (visualizer.getParent() != fullscreenframe.getContentPane())
+				return;
+
+			fullscreenframe.setVisible(false);
+			fullscreenframe.getContentPane().remove(visualizer);
+			if (visualizer_bounds != null)
+				visualizer.setBounds(visualizer_bounds);
+			frmTempestSdr.getContentPane().add(visualizer);
+			frmTempestSdr.getContentPane().revalidate();
+			frmTempestSdr.getContentPane().repaint();
+			frmTempestSdr.requestFocusInWindow();
+		}
+
+		if (fullscreenVideoItem != null)
+			fullscreenVideoItem.setSelected(fullscreen);
 	}
 	
 	private void onKeyboardKeyReleased(final KeyEvent e) {
