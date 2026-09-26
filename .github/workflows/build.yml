@@ -80,6 +80,9 @@ jobs:
 
   android:
     runs-on: ubuntu-24.04
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Check out source
@@ -104,7 +107,6 @@ jobs:
 
       - name: Build arm64 APK
         env:
-          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/28.0.12674087
           RUSTC_WRAPPER: ""
         run: tools/build-android.sh
