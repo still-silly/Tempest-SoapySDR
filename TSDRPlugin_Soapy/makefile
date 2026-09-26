@@ -113,13 +113,17 @@ else ifeq ($(OSNAME),MAC)
 	LIBRARIES+=-L${HOMEBREW_HOME}/lib -lSoapySDR
 else ifeq ($(OSNAME),WINDOWS)
 	LDFLAGS+=-Wl,--add-stdcall-alias
-	LIBRARIES+=-lSoapySDR
+	# MSYS2 provides SoapySDR through pkg-config. This also keeps the include
+	# and library paths correct when the MSYS2 installation is not in a default
+	# compiler search path.
+	SOAPY_CFLAGS ?= $(shell pkg-config --cflags SoapySDR)
+	SOAPY_LIBS ?= $(shell pkg-config --libs SoapySDR)
+	INC += $(SOAPY_CFLAGS)
+	LIBRARIES += $(SOAPY_LIBS)
 endif
 
 # Calculate the path to dependencies
-ifneq ($(OSNAME),WINDOWS)
 _OBJS = $(patsubst %,$(OBJFOLDER)/%,$(OBJS))
-endif
 _DEPS = $(patsubst %,$(SOURCEFOLDER)/%,$(DEPS))
 
 

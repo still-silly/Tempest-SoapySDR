@@ -85,8 +85,14 @@ endif
 PLUGINS=TSDRPlugin_RawFile 
 
 ifeq ($(OSNAME),WINDOWS)
-# Windows only plugins
-PLUGINS += TSDRPlugin_SDRPlay TSDRPlugin_ExtIO
+# Windows-only plugins. SoapySDR is opt-in until its Windows runtime and one
+# or more device modules are installed (e.g. through MSYS2 or PothosSDR).
+PLUGINS += TSDRPlugin_ExtIO
+ifeq ($(WITH_SOAPY),1)
+PLUGINS += TSDRPlugin_Soapy
+else
+PLUGINS += TSDRPlugin_SDRPlay
+endif
 else ifeq ($(OSNAME), LINUX)
 PLUGINS += TSDRPlugin_UHD TSDRPlugin_Soapy
 else ifeq ($(OSNAME), MAC)
