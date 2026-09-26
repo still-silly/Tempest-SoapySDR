@@ -11,7 +11,10 @@
 package martin.tempest.gui;
 
 import java.awt.Component;
+import java.awt.Container;
+import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Font;
 import java.awt.GraphicsDevice;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
@@ -66,6 +69,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.prefs.Preferences;
 
 import javax.swing.JPanel;
@@ -78,6 +83,7 @@ import javax.swing.KeyStroke;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
 import javax.swing.InputMap;
+import javax.swing.SwingUtilities;
 
 public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.IncomingValueCallback, TSDRSourceParamChangedListener, OnTSDRParamChangedCallback {
 	
@@ -114,6 +120,10 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private JFrame frmTempestSdr;
 	private GraphicsDevice fullscreenDevice;
 	private Rectangle applicationWindowedBounds;
+	private Dimension applicationWindowedContentSize;
+	private Map<Component, Rectangle> applicationWindowedComponentBounds;
+	private Map<Component, Font> applicationWindowedFonts;
+	private boolean applicationWindowedResizable;
 	private boolean applicationFullscreen;
 	private JCheckBoxMenuItem fullscreenApplicationItem;
 	private JDialog deviceframe;
@@ -986,37 +996,119 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 		}
 	}
 
-	/** Toggle the complete TempestSDR window between decorated and full-screen modes. */
+	private void captureApplicationComponent(final Component component) {
+		applicationWindowedComponentBounds.put(component, component.getBounds());
+		applicationWindowedFonts.put(component, component.getFont());
+		if (component instanceof Container) {
+			for (final Component child : ((Container) component).getComponents())
+				captureApplicationComponent(child);
+		}
+	}
+
+	private void captureApplicationLayout() {
+		final Container content = frmTempestSdr.getContentPane();
+		applicationWindowedContentSize = content.getSize();
+		if (applicationWindowedContentSize.width <= 0 || applicationWindowedContentSize.height <= 0) {
+			final Insets insets = frmTempestSdr.getInsets();
+			final Rectangle bounds = frmTempestSdr.getBounds();
+			applicationWindowedContentSize = new Dimension(
+					Math.max(1, bounds.width - insets.left - insets.right),
+					Math.max(1, bounds.height - insets.top - insets.bottom));
+		}
+		applicationWindowedComponentBounds = new IdentityHashMap<Component, Rectangle>();
+		applicationWindowedFonts = new IdentityHashMap<Component, Font>();
+		captureApplicationComponent(content);
+	}
+
+	private void scaleApplicationLayout() {
+		if (!applicationFullscreen || applicationWindowedContentSize == null
+				|| applicationWindowedComponentBounds == null)
+			return;
+
+		final Container content = frmTempestSdr.getContentPane();
+		final double scaleX = content.getWidth() / (double) applicationWindowedContentSize.width;
+		final double scaleY = content.getHeight() / (double) applicationWindowedContentSize.height;
+		final double fontScale = Math.min(scaleX, scaleY);
+		if (scaleX <= 0 || scaleY <= 0)
+			return;
+
+		for (final Map.Entry<Component, Rectangle> entry : applicationWindowedComponentBounds.entrySet()) {
+			final Component component = entry.getKey();
+			if (component == content)
+				continue;
+			final Rectangle bounds = entry.getValue();
+			component.setBounds(
+					(int) Math.round(bounds.x * scaleX),
+					(int) Math.round(bounds.y * scaleY),
+					(int) Math.round(bounds.width * scaleX),
+					(int) Math.round(bounds.height * scaleY));
+			final Font font = applicationWindowedFonts.get(component);
+			if (font != null)
+				component.setFont(font.deriveFont((float) Math.max(1.0, font.getSize2D() * fontScale)));
+		}
+		content.revalidate();
+		content.repaint();
+	}
+
+	private void restoreApplicationLayout() {
+		if (applicationWindowedComponentBounds == null)
+			return;
+		for (final Map.Entry<Component, Rectangle> entry : applicationWindowedComponentBounds.entrySet()) {
+			final Component component = entry.getKey();
+			component.setBounds(entry.getValue());
+			final Font font = applicationWindowedFonts.get(component);
+			if (font != null)
+				component.setFont(font);
+		}
+		final Container content = frmTempestSdr.getContentPane();
+		content.revalidate();
+		content.repaint();
+	}
+
+	/** Toggle the complete TempestSDR window between windowed and full-screen modes. */
 	private void setApplicationFullscreen(final boolean fullscreen) {
 		if (frmTempestSdr == null || fullscreen == applicationFullscreen)
 			return;
 
 		if (fullscreen) {
+			frmTempestSdr.validate();
+			captureApplicationLayout();
 			applicationWindowedBounds = frmTempestSdr.getBounds();
-			fullscreenDevice = frmTempestSdr.getGraphicsConfiguration().getDevice();
+			applicationWindowedResizable = frmTempestSdr.isResizable();
+			if (frmTempestSdr.getGraphicsConfiguration() != null)
+				fullscreenDevice = frmTempestSdr.getGraphicsConfiguration().getDevice();
 			if (fullscreenDevice == null)
 				fullscreenDevice = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
 
-			frmTempestSdr.dispose();
-			frmTempestSdr.setUndecorated(true);
+			/* Keep the frame displayable. Disposing it here invalidates dialog owners and
+			 * causes the device settings popup to stop working after fullscreen. */
 			applicationFullscreen = true;
 			if (fullscreenDevice.isFullScreenSupported()) {
 				fullscreenDevice.setFullScreenWindow(frmTempestSdr);
 			} else {
+				frmTempestSdr.setResizable(true);
 				frmTempestSdr.setBounds(fullscreenDevice.getDefaultConfiguration().getBounds());
-				frmTempestSdr.setVisible(true);
 			}
-			frmTempestSdr.requestFocusInWindow();
+			frmTempestSdr.validate();
+			SwingUtilities.invokeLater(new Runnable() {
+				@Override
+				public void run() {
+					if (applicationFullscreen)
+						scaleApplicationLayout();
+					frmTempestSdr.requestFocusInWindow();
+				}
+			});
 		} else {
 			if (fullscreenDevice != null && fullscreenDevice.getFullScreenWindow() == frmTempestSdr)
 				fullscreenDevice.setFullScreenWindow(null);
 
-			frmTempestSdr.dispose();
-			frmTempestSdr.setUndecorated(false);
+			applicationFullscreen = false;
 			if (applicationWindowedBounds != null)
 				frmTempestSdr.setBounds(applicationWindowedBounds);
-			applicationFullscreen = false;
-			frmTempestSdr.setVisible(true);
+			frmTempestSdr.setResizable(applicationWindowedResizable);
+			frmTempestSdr.validate();
+			restoreApplicationLayout();
+			frmTempestSdr.repaint();
 			frmTempestSdr.requestFocusInWindow();
 		}
 
