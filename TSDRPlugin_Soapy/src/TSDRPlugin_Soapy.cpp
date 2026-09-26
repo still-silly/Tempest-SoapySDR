@@ -72,6 +72,13 @@ static int apply_gain(void) {
 	return ret;
 }
 
+static void apply_bandwidth(void) {
+	// TempestSDR reconstructs a wideband amplitude envelope. On SDRplay's
+	// Soapy module, leaving this unset selects a 200 kHz filter even when the
+	// sample rate is 8 MS/s, which can remove most of the display sideband.
+	(void)SoapySDRDevice_setBandwidth(device, SOAPY_SDR_RX, 0, req_rate);
+}
+
 char * strtoken = NULL;
 int pos = 0;
 // this function splits a string into tokens separated by spaces. If tokens are surrounded by ' or ", the spaces inside are ignored
@@ -145,6 +152,7 @@ EXTERNC TSDRPLUGIN_API int __stdcall tsdrplugin_init(const char * params) {
 		const char *error = SoapySDRDevice_lastError();
 		RETURN_EXCEPTION(error ? error : "Failed to set sample rate", TSDR_SAMPLE_RATE_WRONG);
 	}
+	apply_bandwidth();
 
 	ret = SoapySDRDevice_setFrequency(device, SOAPY_SDR_RX, 0, req_freq, NULL);
 	if (ret != 0) {
@@ -178,6 +186,7 @@ EXTERNC TSDRPLUGIN_API uint32_t __stdcall tsdrplugin_setsamplerate(uint32_t rate
 	if (device != NULL) {
 		SoapySDRDevice_setSampleRate(device, SOAPY_SDR_RX, 0, req_rate);
 		req_rate = SoapySDRDevice_getSampleRate(device, SOAPY_SDR_RX, 0);
+		apply_bandwidth();
 	}
 
 	return req_rate;

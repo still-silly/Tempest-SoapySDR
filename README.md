@@ -122,6 +122,8 @@ You need to have MinGW installed and gcc and make commands need to be in your pa
 This checkout adds a generic Linux SoapySDR plugin. Install SoapySDR, a matching
 device module, and the device vendor API. For an RSP1A, install SDRplay API v3
 and SoapySDRPlay3, then enter `driver=sdrplay` in the SoapySDR source settings.
+The plugin requests a receive bandwidth matching the selected sample rate; this
+is important because the SDRplay module otherwise defaults to a 200 kHz filter.
 
 Build the native plugin with:
 
