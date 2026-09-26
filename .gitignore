@@ -9,6 +9,9 @@ tmp/
 *~.nib
 *~
 local.properties
+.cxx/
+.externalNativeBuild/
+android/app/src/main/jniLibs/
 .settings/
 .loadpath
 
@@ -58,6 +61,7 @@ local.properties
 
 # Package Files #
 *.jar
+!android/gradle/wrapper/gradle-wrapper.jar
 *.mf
 *.war
 *.ear

@@ -8,9 +8,5 @@ license = "GPL-3.0-only"
 repository = "https://github.com/still-silly/Tempest-SoapySDR"
 
 [workspace.dependencies]
-slint = { version = "1.18.1", default-features = false, features = [
-    "backend-winit",
-    "renderer-femtovg",
-    "compat-1-2",
-] }
+slint = { version = "1.18.1", default-features = false, features = ["compat-1-2"] }
 slint-build = "1.18.1"

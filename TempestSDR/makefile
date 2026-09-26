@@ -100,7 +100,8 @@ OBJFOLDER=obj
 
 # OS specific flags
 ifeq ($(OSNAME),LINUX)
-	CFLAGS+=-fPIC
+	CFLAGS+=-fPIC -pthread
+	LDLIBS+=-lm -ldl -pthread
 else ifeq ($(OSNAME),WINDOWS)
 	LDFLAGS+=-Wl,--add-stdcall-alias
 	CFLAGS+=-fPIC
@@ -117,7 +118,7 @@ all : $(OUTPUTFOLDER)/$(LIBPREFIX)TSDRLibrary$(EXT)
 
 # Link
 $(OUTPUTFOLDER)/$(LIBPREFIX)TSDRLibrary$(EXT) : $(_OBJS)
-	$(CC) -Wall -shared $(LDFLAGS) $(DEBUGFLAGS) $(COMPILATION_TYPE) -o $@ $(_OBJS)
+	$(CC) -Wall -shared $(LDFLAGS) $(DEBUGFLAGS) $(COMPILATION_TYPE) -o $@ $(_OBJS) $(LDLIBS)
 	$(AR) rcs $(OUTPUTFOLDER)/$(LIBPREFIX)TSDRLibrary.a $(_OBJS)
 
 # Create folders if needed and compile

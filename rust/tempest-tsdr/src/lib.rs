@@ -11,6 +11,13 @@ use std::{
     os::raw::{c_char, c_double, c_float, c_int, c_void},
     ptr::{self, NonNull},
     rc::Rc,
+    slice,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+        mpsc::{Receiver, SyncSender, TrySendError, sync_channel},
+    },
+    thread::{self, JoinHandle},
 };
 
 const TSDR_OK: c_int = 0;
@@ -22,6 +29,7 @@ struct TsdrLib {
 
 type ValueChangedCallback = unsafe extern "C" fn(c_int, c_double, c_double, *mut c_void);
 type PlotReadyCallback = unsafe extern "C" fn(c_int, c_int, *mut c_double, c_int, u32, *mut c_void);
+type ReadAsyncCallback = unsafe extern "C" fn(*mut c_float, c_int, c_int, *mut c_void);
 
 unsafe extern "C" {
     fn tsdr_init(
@@ -33,6 +41,11 @@ unsafe extern "C" {
     fn tsdr_setbasefreq(tsdr: *mut TsdrLib, frequency: u32) -> c_int;
     fn tsdr_setgain(tsdr: *mut TsdrLib, gain: c_float) -> c_int;
     fn tsdr_setresolution(tsdr: *mut TsdrLib, height: c_int, refresh_rate: c_double) -> c_int;
+    fn tsdr_readasync(
+        tsdr: *mut TsdrLib,
+        callback: Option<ReadAsyncCallback>,
+        context: *mut c_void,
+    ) -> c_int;
     fn tsdr_loadplugin(
         tsdr: *mut TsdrLib,
         plugin_path: *const c_char,
@@ -136,6 +149,18 @@ impl TsdrEngine {
         unsafe { tsdr_isrunning(self.raw.as_ptr()) != 0 }
     }
 
+    fn read_async(&mut self, sender: SyncSender<CaptureEvent>) -> Result<(), TsdrError> {
+        let context = FrameCallbackContext { sender };
+        let status = unsafe {
+            tsdr_readasync(
+                self.raw.as_ptr(),
+                Some(frame_callback),
+                (&context as *const FrameCallbackContext).cast_mut().cast(),
+            )
+        };
+        self.status(status)
+    }
+
     fn status(&self, status: c_int) -> Result<(), TsdrError> {
         if status == TSDR_OK {
             return Ok(());
@@ -155,6 +180,213 @@ impl TsdrEngine {
             message,
         })
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RgbFrame {
+    pub width: u32,
+    pub height: u32,
+    /// Tightly packed RGB888 pixels.
+    pub pixels: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CaptureConfig {
+    pub plugin_path: String,
+    pub plugin_parameters: String,
+    pub frequency_hz: u32,
+    pub gain: f32,
+    pub display_timing: DisplayTiming,
+}
+
+#[derive(Debug)]
+pub enum CaptureEvent {
+    Starting,
+    Running,
+    Frame(RgbFrame),
+    Stopped(Result<(), TsdrError>),
+}
+
+struct FrameCallbackContext {
+    sender: SyncSender<CaptureEvent>,
+}
+
+unsafe extern "C" fn frame_callback(
+    buffer: *mut c_float,
+    width: c_int,
+    height: c_int,
+    context: *mut c_void,
+) {
+    if buffer.is_null() || context.is_null() || width <= 0 || height <= 0 {
+        return;
+    }
+
+    let Ok(width) = u32::try_from(width) else {
+        return;
+    };
+    let Ok(height) = u32::try_from(height) else {
+        return;
+    };
+    let Some(pixel_count) = (width as usize).checked_mul(height as usize) else {
+        return;
+    };
+    let Some(byte_count) = pixel_count.checked_mul(3) else {
+        return;
+    };
+
+    // A corrupt plugin or timing calculation must not request an unbounded
+    // allocation from a native callback.
+    if byte_count > 256 * 1024 * 1024 {
+        return;
+    }
+
+    let samples = unsafe { slice::from_raw_parts(buffer, pixel_count) };
+    let frame = frame_from_samples(width, height, samples);
+    let context = unsafe { &*(context.cast::<FrameCallbackContext>()) };
+
+    // Rendering is intentionally lossy: if the UI is behind, retain native
+    // capture throughput and discard the stale frame.
+    match context.sender.try_send(CaptureEvent::Frame(frame)) {
+        Ok(()) | Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {}
+    }
+}
+
+fn frame_from_samples(width: u32, height: u32, samples: &[f32]) -> RgbFrame {
+    let mut pixels = Vec::with_capacity(samples.len() * 3);
+    for &value in samples {
+        let color = if value > 0.0 && value <= 1.0 {
+            let gray = (value * 255.0) as u8;
+            [gray, gray, gray]
+        } else if value <= 0.0 {
+            [0, 0, 0]
+        } else if value == 256.0 {
+            [255, 0, 0]
+        } else if value == 512.0 {
+            [0, 255, 0]
+        } else if value == 1024.0 {
+            [0, 0, 255]
+        } else {
+            [255, 255, 255]
+        };
+        pixels.extend_from_slice(&color);
+    }
+
+    RgbFrame {
+        width,
+        height,
+        pixels,
+    }
+}
+
+struct StopState {
+    native: Mutex<*mut TsdrLib>,
+    requested: AtomicBool,
+}
+
+// The pointer is only read while holding `native`. Its pointee remains owned
+// by the capture worker until the pointer is cleared under the same lock.
+unsafe impl Send for StopState {}
+unsafe impl Sync for StopState {}
+
+impl StopState {
+    fn request(&self) {
+        self.requested.store(true, Ordering::Release);
+        let native = self.native.lock().expect("capture stop mutex poisoned");
+        if !native.is_null() {
+            unsafe {
+                tsdr_stop(*native);
+            }
+        }
+    }
+}
+
+pub struct CaptureSession {
+    stop: Arc<StopState>,
+    worker: Option<JoinHandle<()>>,
+}
+
+impl CaptureSession {
+    pub fn start(config: CaptureConfig) -> (Self, Receiver<CaptureEvent>) {
+        // Two slots provide one frame under presentation and one pending frame.
+        // The callback drops additional frames instead of growing memory.
+        let (sender, receiver) = sync_channel(2);
+        let stop = Arc::new(StopState {
+            native: Mutex::new(ptr::null_mut()),
+            requested: AtomicBool::new(false),
+        });
+        let worker_stop = Arc::clone(&stop);
+
+        let worker = thread::spawn(move || {
+            let _ = sender.send(CaptureEvent::Starting);
+            let result = run_capture(config, &sender, &worker_stop);
+            let _ = sender.send(CaptureEvent::Stopped(result));
+        });
+
+        (
+            Self {
+                stop,
+                worker: Some(worker),
+            },
+            receiver,
+        )
+    }
+
+    pub fn request_stop(&self) {
+        self.stop.request();
+    }
+
+    pub fn is_finished(&self) -> bool {
+        self.worker.as_ref().is_none_or(JoinHandle::is_finished)
+    }
+
+    pub fn join(mut self) -> thread::Result<()> {
+        self.request_stop();
+        match self.worker.take() {
+            Some(worker) => worker.join(),
+            None => Ok(()),
+        }
+    }
+}
+
+impl Drop for CaptureSession {
+    fn drop(&mut self) {
+        self.request_stop();
+    }
+}
+
+fn run_capture(
+    config: CaptureConfig,
+    sender: &SyncSender<CaptureEvent>,
+    stop: &StopState,
+) -> Result<(), TsdrError> {
+    let mut engine = TsdrEngine::new()?;
+    {
+        let mut native = stop.native.lock().expect("capture stop mutex poisoned");
+        *native = engine.raw.as_ptr();
+    }
+
+    let result = (|| {
+        engine.set_display_mode(
+            config.display_timing.active_height,
+            config.display_timing.refresh_rate_hz,
+        )?;
+        engine.set_frequency(config.frequency_hz)?;
+        engine.set_gain(config.gain)?;
+        engine.load_plugin(&config.plugin_path, &config.plugin_parameters)?;
+
+        if stop.requested.load(Ordering::Acquire) {
+            return Ok(());
+        }
+
+        let _ = sender.send(CaptureEvent::Running);
+        engine.read_async(sender.clone())
+    })();
+
+    {
+        let mut native = stop.native.lock().expect("capture stop mutex poisoned");
+        *native = ptr::null_mut();
+    }
+    result
 }
 
 impl Drop for TsdrEngine {
@@ -219,5 +451,34 @@ mod tests {
             .expect("frequency should be accepted");
         engine.set_gain(0.5).expect("gain should be accepted");
         assert!(!engine.is_running());
+    }
+
+    #[test]
+    fn native_frame_values_are_converted_to_rgb() {
+        let frame = frame_from_samples(3, 2, &[-1.0, 0.5, 2.0, 256.0, 512.0, 1024.0]);
+        assert_eq!(frame.width, 3);
+        assert_eq!(frame.height, 2);
+        assert_eq!(
+            frame.pixels,
+            [
+                0, 0, 0, 127, 127, 127, 255, 255, 255, 255, 0, 0, 0, 255, 0, 0, 0, 255,
+            ]
+        );
+    }
+
+    #[test]
+    fn capture_reports_plugin_load_failure_without_hardware() {
+        let config = CaptureConfig {
+            plugin_path: "/definitely/not/a/tempest/plugin.so".into(),
+            plugin_parameters: String::new(),
+            frequency_hz: 154_000_000,
+            gain: 0.5,
+            display_timing: DisplayTiming::DELL_2407WFP_1920X1200,
+        };
+        let (session, events) = CaptureSession::start(config);
+        assert!(matches!(events.recv().unwrap(), CaptureEvent::Starting));
+        let stopped = events.recv().unwrap();
+        assert!(matches!(stopped, CaptureEvent::Stopped(Err(_))));
+        session.join().unwrap();
     }
 }

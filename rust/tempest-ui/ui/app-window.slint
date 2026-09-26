@@ -1,4 +1,4 @@
-import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
+import { Button, HorizontalBox, LineEdit, VerticalBox } from "std-widgets.slint";
 
 export component AppWindow inherits Window {
     title: "TempestSDR — Rust/Slint Prototype";
@@ -10,6 +10,11 @@ export component AppWindow inherits Window {
     in property <string> display-name: "No display profile";
     in property <string> timing-summary: "";
     in-out property <string> status-text: "Initializing…";
+    in-out property <string> plugin-path: "";
+    in-out property <string> source-arguments: "driver=rtlsdr";
+    in-out property <string> frequency-mhz: "154.000";
+    in-out property <string> gain-percent: "50";
+    in-out property <bool> capture-active: false;
     callback start-requested();
     callback stop-requested();
 
@@ -84,18 +89,10 @@ export component AppWindow inherits Window {
                         font-size: 12px;
                     }
 
-                    Rectangle {
+                    LineEdit {
                         height: 42px;
-                        border-radius: 6px;
-                        background: #0d131c;
-
-                        Text {
-                            text: "154.000 MHz";
-                            color: #e5edf5;
-                            vertical-alignment: center;
-                            x: 12px;
-                            height: parent.height;
-                        }
+                        text <=> root.frequency-mhz;
+                        placeholder-text: "Frequency in MHz";
                     }
 
                     Text {
@@ -104,29 +101,47 @@ export component AppWindow inherits Window {
                         font-size: 12px;
                     }
 
-                    Rectangle {
+                    LineEdit {
                         height: 42px;
-                        border-radius: 6px;
-                        background: #0d131c;
+                        text <=> root.source-arguments;
+                        placeholder-text: "driver=rtlsdr";
+                    }
 
-                        Text {
-                            text: "RTL-SDR · prototype";
-                            color: #e5edf5;
-                            vertical-alignment: center;
-                            x: 12px;
-                            height: parent.height;
-                        }
+                    Text {
+                        text: "Gain percent";
+                        color: #9fb1c5;
+                        font-size: 12px;
+                    }
+
+                    LineEdit {
+                        height: 42px;
+                        text <=> root.gain-percent;
+                        placeholder-text: "0–100";
+                    }
+
+                    Text {
+                        text: "Plugin";
+                        color: #9fb1c5;
+                        font-size: 12px;
+                    }
+
+                    LineEdit {
+                        height: 42px;
+                        text <=> root.plugin-path;
+                        placeholder-text: "Path to TSDR source plugin";
                     }
 
                     Rectangle { vertical-stretch: 1; }
 
                     Button {
-                        text: "Start capture";
+                        text: root.capture-active ? "Capture active" : "Start capture";
+                        enabled: !root.capture-active;
                         clicked => { root.start-requested(); }
                     }
 
                     Button {
                         text: "Stop";
+                        enabled: root.capture-active;
                         clicked => { root.stop-requested(); }
                     }
                 }

@@ -6,16 +6,12 @@ fn main() {
         env::var_os("CARGO_MANIFEST_DIR").expect("Cargo did not provide manifest directory"),
     );
 
-    let default_library_dir = manifest_dir
-        .join("../..")
-        .join("TempestSDR")
-        .join("bin")
-        .join(if target_os == "windows" {
-            "WINDOWS"
-        } else {
-            "LINUX"
-        })
-        .join("X64");
+    let repository_root = manifest_dir.join("../..");
+    let default_library_dir = match target_os.as_str() {
+        "android" => repository_root.join("build/android-arm64"),
+        "windows" => repository_root.join("TempestSDR/bin/WINDOWS/X64"),
+        _ => repository_root.join("TempestSDR/bin/LINUX/X64"),
+    };
 
     let library_dir = env::var_os("TSDR_LIBRARY_DIR")
         .map(PathBuf::from)
@@ -26,12 +22,17 @@ fn main() {
     println!("cargo:rustc-link-search=native={}", library_dir.display());
     println!("cargo:library_dir={}", library_dir.display());
 
-    if target_os == "windows" {
-        println!("cargo:rustc-link-lib=dylib=TSDRLibrary");
-    } else {
-        println!("cargo:rustc-link-lib=dylib=TSDRLibrary");
-        println!("cargo:rustc-link-lib=dylib=m");
-        println!("cargo:rustc-link-lib=dylib=dl");
-        println!("cargo:rustc-link-lib=dylib=pthread");
+    println!("cargo:rustc-link-lib=dylib=TSDRLibrary");
+    match target_os.as_str() {
+        "android" => {
+            println!("cargo:rustc-link-lib=dylib=m");
+            println!("cargo:rustc-link-lib=dylib=dl");
+        }
+        "windows" => {}
+        _ => {
+            println!("cargo:rustc-link-lib=dylib=m");
+            println!("cargo:rustc-link-lib=dylib=dl");
+            println!("cargo:rustc-link-lib=dylib=pthread");
+        }
     }
 }

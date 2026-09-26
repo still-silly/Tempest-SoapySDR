@@ -6,9 +6,23 @@ license.workspace = true
 repository.workspace = true
 build = "build.rs"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "tempest-ui"
+path = "src/main.rs"
+
 [dependencies]
-slint.workspace = true
 tempest-tsdr = { path = "../tempest-tsdr" }
+
+[target.'cfg(not(target_os = "android"))'.dependencies]
+slint = { workspace = true, features = ["backend-winit", "renderer-femtovg"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21.1"
+slint = { workspace = true, features = ["backend-android-activity-06", "renderer-skia"] }
 
 [build-dependencies]
 slint-build.workspace = true

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Common Realtek reference IDs. Additional tuner IDs can be added here. -->
+    <usb-device
+        vendor-id="3034"
+        product-id="10289" />
+    <usb-device
+        vendor-id="3034"
+        product-id="10290" />
+    <usb-device
+        vendor-id="3034"
+        product-id="10296" />
+    <usb-device
+        vendor-id="3034"
+        product-id="10291" />
+    <usb-device
+        vendor-id="3034"
+        product-id="10295" />
+    <usb-device
+        vendor-id="3034"
+        product-id="10312" />
+</resources>

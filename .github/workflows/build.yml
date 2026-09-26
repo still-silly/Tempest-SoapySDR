@@ -2,7 +2,7 @@ name: Build Tempest SoapySDR
 
 on:
   push:
-    branches: [master]
+    branches: [master, "feat/**"]
   pull_request:
     branches: [master]
 
@@ -23,9 +23,18 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             libboost-program-options-dev \
             libboost-thread-dev \
+            libegl1-mesa-dev \
+            libfontconfig1-dev \
             libsoapysdr-dev \
             libuhd-dev \
+            libwayland-dev \
+            libxkbcommon-dev \
             pkg-config
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -35,6 +44,16 @@ jobs:
 
       - name: Build SoapySDR plugin
         run: make -C TSDRPlugin_Soapy clean all
+
+      - name: Build native TempestSDR core
+        run: make -C TempestSDR clean all
+
+      - name: Test Rust and Slint prototype
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/TempestSDR/bin/LINUX/X64
+        run: |
+          cargo test --manifest-path rust/Cargo.toml
+          cargo clippy --manifest-path rust/Cargo.toml --workspace --all-targets -- -D warnings
 
       - name: Build smoke tests
         run: make -C tools clean all
@@ -58,3 +77,41 @@ jobs:
             JavaGUI/JTempestSDR.jar
             TSDRPlugin_Soapy/bin/LINUX/X64/libTSDRPlugin_Soapy.so
             tools/soapy_plugin_smoke
+
+  android:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Rust Android target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android build packages
+        run: sdkmanager "platforms;android-34" "build-tools;35.0.0" "ndk;28.0.12674087"
+
+      - name: Build arm64 APK
+        env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
+          ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/28.0.12674087
+          RUSTC_WRAPPER: ""
+        run: tools/build-android.sh
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tempest-slint-android-arm64
+          if-no-files-found: error
+          path: android/app/build/outputs/apk/debug/app-debug.apk
