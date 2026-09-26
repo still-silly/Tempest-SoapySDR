@@ -97,7 +97,10 @@ jobs:
           targets: aarch64-linux-android
 
       - name: Install Android build packages
-        run: sdkmanager "platforms;android-34" "build-tools;35.0.0" "ndk;28.0.12674087"
+        run: |
+          SDKMANAGER_PATH="$(find "${ANDROID_HOME}/cmdline-tools" -mindepth 2 -maxdepth 2 -type f -name sdkmanager | sort -V | tail -n 1)"
+          test -x "${SDKMANAGER_PATH}"
+          "${SDKMANAGER_PATH}" "platforms;android-34" "build-tools;35.0.0" "ndk;28.0.12674087"
 
       - name: Build arm64 APK
         env:
