@@ -89,6 +89,10 @@ tools/soapy_direct_smoke
 tools/soapy_plugin_smoke
 [Oo]bj/
 
+# Rust build output
+target/
+rust/target/
+
 # MSTest test Results
 [Tt]est[Rr]esult*/
 [Bb]uild[Ll]og.*

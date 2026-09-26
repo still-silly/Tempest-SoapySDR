@@ -62,7 +62,15 @@ struct tsdr_context {
 void tsdr_init(tsdr_lib_t ** tsdr, tsdr_value_changed_callback callback, tsdr_on_plot_ready_callback plotready_callback, void * ctx) {
 	int i;
 
-	*tsdr = (tsdr_lib_t *) malloc(sizeof(tsdr_lib_t));
+	/*
+	 * Keep every scalar and pointer in a defined state.  The Java wrapper used
+	 * to populate most of these fields immediately after construction, but a
+	 * native caller is allowed to free a newly-created instance without doing
+	 * so.  calloc also guarantees that errormsg is NULL before tsdr_free().
+	 */
+	*tsdr = (tsdr_lib_t *) calloc(1, sizeof(tsdr_lib_t));
+	if (*tsdr == NULL)
+		return;
 
 	(*tsdr)->nativerunning = 0;
 	(*tsdr)->running = 0;
@@ -520,11 +528,10 @@ int tsdr_loadplugin(tsdr_lib_t * tsdr, const char * pluginfilepath, const char *
 
 	tsdr->running = 0;
 	mutex_waitforever(&tsdr->stopsync);
-	free(context);
-
 	cb_free(&context->circbuf_posproc_to_video);
 	cb_free(&context->circbuf_decimation_to_posproc);
 	cb_free(&context->circbuf_device_to_decimation);
+	free(context);
 
 end:
 	if (pluginsfault) announceexception(tsdr,tsdr->plugin.tsdrplugin_getlasterrortext(),status);
