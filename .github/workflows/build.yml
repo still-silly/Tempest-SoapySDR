@@ -80,9 +80,6 @@ jobs:
 
   android:
     runs-on: ubuntu-24.04
-    env:
-      ANDROID_HOME: /usr/local/lib/android/sdk
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: Check out source
@@ -99,14 +96,14 @@ jobs:
         with:
           targets: aarch64-linux-android
 
-      - name: Install Android build packages
-        run: |
-          SDKMANAGER_PATH="$(find "${ANDROID_HOME}/cmdline-tools" -mindepth 2 -maxdepth 2 -type f -name sdkmanager | sort -V | tail -n 1)"
-          test -x "${SDKMANAGER_PATH}"
-          "${SDKMANAGER_PATH}" "platforms;android-34" "build-tools;35.0.0" "ndk;28.0.12674087"
+      - name: Set up Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-34 build-tools;35.0.0 ndk;28.0.12674087"
 
       - name: Build arm64 APK
         env:
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/28.0.12674087
           RUSTC_WRAPPER: ""
         run: tools/build-android.sh
