@@ -10,16 +10,25 @@
  ******************************************************************************/
 package martin.tempest.sources;
 
+import java.awt.Container;
+
 /**
- * This plugin provides support for RTL-SDR devices using the Soapy SDR API.
+ * This plugin provides support for SoapySDR devices.
  *
  * @author Martin Marinov
  *
  */
-public class TSDRSoapyRTLSDRSource extends TSDRSource {
+public class TSDRSoapySource extends TSDRSource {
 
-	public TSDRSoapyRTLSDRSource() {
-		super("RTL-SDR (via SoapySDR)", "TSDRPlugin_SoapyRTLSDR", false);
+	public TSDRSoapySource() {
+		super("SoapySDR device", "TSDRPlugin_Soapy", false);
+	}
+
+	@Override
+	public boolean populateGUI(final Container cont, final String defaultprefs, final ActionListenerRegistrator okbutton) {
+		final String prefs = (defaultprefs == null || defaultprefs.trim().isEmpty())
+				? "driver=sdrplay" : defaultprefs;
+		return super.populateGUI(cont, prefs, okbutton);
 	}
 
 }

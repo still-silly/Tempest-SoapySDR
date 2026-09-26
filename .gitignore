@@ -85,6 +85,8 @@ x64/
 build/
 bld/
 [Bb]in/
+tools/soapy_direct_smoke
+tools/soapy_plugin_smoke
 [Oo]bj/
 
 # MSTest test Results

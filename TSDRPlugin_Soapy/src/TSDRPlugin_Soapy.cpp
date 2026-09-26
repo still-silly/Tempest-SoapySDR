@@ -31,9 +31,9 @@ volatile int is_running = 0;
 
 uint32_t req_freq = 400e6;
 float req_gain = 1;
-double req_rate = 3.2e6; // Default sample rate for RTL-SDR
+double req_rate = 2.0e6; // Conservative default supported by most Soapy devices
 
-char errormsg_code;
+int errormsg_code;
 char * errormsg;
 int errormsg_size = 0;
 
@@ -55,9 +55,21 @@ static inline void announceexception(const char * message, int status) {
 	strcpy(errormsg, message);
 }
 
-double tosoapygain(float gain, SoapySDRDevice *device, const char *gainName) {
+double tosoapygain(float gain, SoapySDRDevice *device) {
 	SoapySDRRange range = SoapySDRDevice_getGainRange(device, SOAPY_SDR_RX, 0);
+	if (gain < 0) gain = 0;
+	if (gain > 1) gain = 1;
 	return gain * (range.maximum - range.minimum) + range.minimum;
+}
+
+static int apply_gain(void) {
+	size_t num_gains = 0;
+	char **gainNames = SoapySDRDevice_listGains(device, SOAPY_SDR_RX, 0, &num_gains);
+	int ret = 0;
+	if (num_gains > 0)
+		ret = SoapySDRDevice_setGain(device, SOAPY_SDR_RX, 0, tosoapygain(req_gain, device));
+	SoapySDRStrings_clear(&gainNames, num_gains);
+	return ret;
 }
 
 char * strtoken = NULL;
@@ -106,24 +118,23 @@ char * nexttoken(char * input) {
 }
 
 EXTERNC TSDRPLUGIN_API void __stdcall tsdrplugin_getName(char * name) {
-	strcpy(name, "TSDR SoapyRTLSDR Plugin");
+	strcpy(name, "TSDR SoapySDR Plugin");
 }
 
 EXTERNC TSDRPLUGIN_API int __stdcall tsdrplugin_init(const char * params) {
-	// Create args with driver=rtlsdr
-	SoapySDRKwargs args = SoapySDRKwargs_fromString(params ? params : "");
+	if (device != NULL || stream != NULL)
+		tsdrplugin_cleanup();
 
-	// Set driver to rtlsdr if not specified
-	if (SoapySDRKwargs_get(&args, "driver") == NULL) {
-		SoapySDRKwargs_set(&args, "driver", "rtlsdr");
-	}
+	// Pass the complete SoapySDR argument string through unchanged.
+	SoapySDRKwargs args = SoapySDRKwargs_fromString(params ? params : "");
 
 	// Create device
 	device = SoapySDRDevice_make(&args);
 	SoapySDRKwargs_clear(&args);
 
 	if (device == NULL) {
-		RETURN_EXCEPTION("Failed to create SoapySDR RTLSDR device", TSDR_CANNOT_OPEN_DEVICE);
+		const char *error = SoapySDRDevice_lastError();
+		RETURN_EXCEPTION(error ? error : "Failed to create SoapySDR device", TSDR_CANNOT_OPEN_DEVICE);
 	}
 
 	// Setup device
@@ -143,16 +154,16 @@ EXTERNC TSDRPLUGIN_API int __stdcall tsdrplugin_init(const char * params) {
 		RETURN_EXCEPTION(error ? error : "Failed to set frequency", TSDR_CANNOT_OPEN_DEVICE);
 	}
 
-	// Set gain if possible - use a simple gain value first
-	SoapySDRDevice_setGain(device, SOAPY_SDR_RX, 0, 20.0); // Fixed gain for RTL-SDR
+	// TempestSDR exposes a manual normalized gain control. Disable AGC when
+	// the backend supports it so devices such as the RSP1A can honor that gain.
+	if (SoapySDRDevice_hasGainMode(device, SOAPY_SDR_RX, 0))
+		SoapySDRDevice_setGainMode(device, SOAPY_SDR_RX, 0, false);
 
-	// Setup stream
-	stream = SoapySDRDevice_setupStream(device, SOAPY_SDR_RX, SOAPY_SDR_CF32, NULL, 0, NULL);
-	if (stream == NULL) {
+	if (apply_gain() != 0) {
+		const char *error = SoapySDRDevice_lastError();
 		SoapySDRDevice_unmake(device);
 		device = NULL;
-		const char *error = SoapySDRDevice_lastError();
-		RETURN_EXCEPTION(error ? error : "Failed to setup stream", TSDR_CANNOT_OPEN_DEVICE);
+		RETURN_EXCEPTION(error ? error : "Failed to set gain", TSDR_CANNOT_OPEN_DEVICE);
 	}
 
 	RETURN_OK();
@@ -197,25 +208,32 @@ EXTERNC TSDRPLUGIN_API int __stdcall tsdrplugin_stop(void) {
 
 EXTERNC TSDRPLUGIN_API int __stdcall tsdrplugin_setgain(float gain) {
 	req_gain = gain;
-	if (device != NULL) {
-		size_t num_gains = 0;
-		char **gainNames = SoapySDRDevice_listGains(device, SOAPY_SDR_RX, 0, &num_gains);
-		if (num_gains > 0) {
-			SoapySDRDevice_setGain(device, SOAPY_SDR_RX, 0, tosoapygain(req_gain, device, gainNames[0]));
-		}
-		SoapySDRStrings_clear(&gainNames, num_gains);
-	}
+	if (device != NULL) apply_gain();
 	RETURN_OK();
 }
 
 EXTERNC TSDRPLUGIN_API int __stdcall tsdrplugin_readasync(tsdrplugin_readasync_function cb, void *ctx) {
 	is_running = 1;
 
+	// Set up the stream only after all GUI-requested rate/frequency changes have
+	// been applied. Some Soapy drivers reject configuration changes after this.
+	stream = SoapySDRDevice_setupStream(device, SOAPY_SDR_RX, SOAPY_SDR_CF32, NULL, 0, NULL);
+	if (stream == NULL) {
+		is_running = 0;
+		const char *error = SoapySDRDevice_lastError();
+		RETURN_EXCEPTION(error ? error : "Failed to setup stream", TSDR_CANNOT_OPEN_DEVICE);
+	}
+
 	// Activate stream
 	int ret = SoapySDRDevice_activateStream(device, stream, 0, 0, 0);
 	if (ret != 0) {
 		const char *error = SoapySDRDevice_lastError();
-		RETURN_EXCEPTION(error ? error : "Failed to activate stream", TSDR_CANNOT_OPEN_DEVICE);
+		char error_msg[256];
+		snprintf(error_msg, sizeof(error_msg), "%s", error ? error : "Failed to activate stream");
+		SoapySDRDevice_closeStream(device, stream);
+		stream = NULL;
+		is_running = 0;
+		RETURN_EXCEPTION(error_msg, TSDR_CANNOT_OPEN_DEVICE);
 	}
 
 	size_t buff_size = HOW_OFTEN_TO_CALL_CALLBACK_SEC * req_rate * 2;
@@ -225,6 +243,9 @@ EXTERNC TSDRPLUGIN_API int __stdcall tsdrplugin_readasync(tsdrplugin_readasync_f
 	float *buff = (float *) malloc(sizeof(float) * buff_size);
 	if (buff == NULL) {
 		SoapySDRDevice_deactivateStream(device, stream, 0, 0);
+		SoapySDRDevice_closeStream(device, stream);
+		stream = NULL;
+		is_running = 0;
 		RETURN_EXCEPTION("Failed to allocate buffer", TSDR_CANNOT_OPEN_DEVICE);
 	}
 
@@ -245,12 +266,20 @@ EXTERNC TSDRPLUGIN_API int __stdcall tsdrplugin_readasync(tsdrplugin_readasync_f
 		} else if (ret == SOAPY_SDR_TIMEOUT) {
 			// Timeout - continue
 			continue;
+		} else if (ret == SOAPY_SDR_OVERFLOW) {
+			// The exact loss is device-dependent. Reset TempestSDR's stream
+			// synchronisation before accepting more samples.
+			cb(NULL, 0, ctx, 1);
+			continue;
 		} else {
 			// Error
 			char error_msg[256];
 			snprintf(error_msg, sizeof(error_msg), "Stream read error: %d", ret);
 			free(buff);
 			SoapySDRDevice_deactivateStream(device, stream, 0, 0);
+			SoapySDRDevice_closeStream(device, stream);
+			stream = NULL;
+			is_running = 0;
 			RETURN_EXCEPTION(error_msg, TSDR_CANNOT_OPEN_DEVICE);
 		}
 	}
@@ -273,6 +302,7 @@ EXTERNC TSDRPLUGIN_API char* __stdcall tsdrplugin_getlasterrortext(void) {
 
 EXTERNC TSDRPLUGIN_API void __stdcall tsdrplugin_cleanup(void) {
 	if (stream != NULL) {
+		SoapySDRDevice_deactivateStream(device, stream, 0, 0);
 		SoapySDRDevice_closeStream(device, stream);
 		stream = NULL;
 	}

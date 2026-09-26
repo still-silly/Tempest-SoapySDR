@@ -1,0 +1,31 @@
+TSDR Plugin for SoapySDR
+
+This plugin provides Linux receive support for devices exposed through the SoapySDR
+abstraction layer, including RTL-SDR and SDRplay devices with their corresponding
+SoapySDR modules installed.
+
+Requirements:
+- SoapySDR library (https://github.com/pothosware/SoapySDR)
+- A device module, such as SoapyRTLSDR or SoapySDRPlay3
+
+Installation:
+1. Install SoapySDR and the RTL-SDR module
+2. Build this plugin by running 'make' in this directory
+3. Copy the built library to the appropriate plugin directory
+
+Parameters:
+The plugin accepts SoapySDR device arguments in the format "key1=value1,key2=value2".
+
+Supported parameters:
+- driver: Soapy driver name (recommended; e.g. `sdrplay` or `rtlsdr`)
+- serial: device serial number (optional)
+- any additional arguments accepted by the selected SoapySDR module
+
+Examples:
+driver=sdrplay
+driver=rtlsdr,serial=12345678
+
+Default settings:
+- Sample rate: 2.0 MHz
+- Frequency: 400 MHz
+- Gain: normalized 0.0-1.0, mapped to the device's overall gain range

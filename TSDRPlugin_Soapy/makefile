@@ -10,7 +10,7 @@
 #-------------------------------------------------------------------------------
 # This makefile should work for all plugins that reside in the root directory of the repository.
 # The header file is copied over from the source
-PLUGNAME=TSDRPlugin_SoapyRTLSDR
+PLUGNAME=TSDRPlugin_Soapy
 
 # Dependencies
 OBJS=$(PLUGNAME).o

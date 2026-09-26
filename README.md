@@ -115,4 +115,21 @@ You need to have MinGW installed and gcc and make commands need to be in your pa
 
 `libuhd-dev`
 
+### SoapySDR prototype
+
+This checkout adds a generic Linux SoapySDR plugin. Install SoapySDR, a matching
+device module, and the device vendor API. For an RSP1A, install SDRplay API v3
+and SoapySDRPlay3, then enter `driver=sdrplay` in the SoapySDR source settings.
+
+Build the native plugin with:
+
+    make -C TSDRPlugin_Soapy
+
+The optional smoke test opens the device, streams for two seconds, and checks
+that TempestSDR receives complex samples:
+
+    make -C tools
+    SOAPY_SDR_PLUGIN_PATH=/path/to/SoapySDRPlay3/build \
+      tools/soapy_plugin_smoke TSDRPlugin_Soapy/bin/LINUX/X64/libTSDRPlugin_Soapy.so \
+      'driver=sdrplay'
 
