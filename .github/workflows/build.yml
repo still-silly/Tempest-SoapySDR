@@ -94,14 +94,14 @@ jobs:
       - name: Set up Rust Android target
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android
+          targets: aarch64-linux-android,x86_64-linux-android
 
       - name: Set up Android SDK and NDK
         uses: android-actions/setup-android@v3
         with:
           packages: "platform-tools platforms;android-34 build-tools;35.0.0 ndk;28.0.12674087"
 
-      - name: Build arm64 APK
+      - name: Build Android APK
         env:
           ANDROID_SDK_ROOT: ${{ env.ANDROID_HOME }}
           ANDROID_NDK_ROOT: ${{ env.ANDROID_HOME }}/ndk/28.0.12674087
@@ -111,6 +111,6 @@ jobs:
       - name: Upload Android APK
         uses: actions/upload-artifact@v5
         with:
-          name: tempest-slint-android-arm64
+          name: tempest-slint-android
           if-no-files-found: error
           path: android/app/build/outputs/apk/debug/app-debug.apk

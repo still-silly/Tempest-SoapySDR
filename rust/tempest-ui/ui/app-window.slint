@@ -2,25 +2,25 @@ import { Button, HorizontalBox, LineEdit, VerticalBox } from "std-widgets.slint"
 
 export component AppWindow inherits Window {
     title: "TempestSDR — Rust/Slint Prototype";
-    width: 1100px;
-    height: 760px;
     background: #10141c;
 
     in property <image> video-frame;
     in property <string> display-name: "No display profile";
     in property <string> timing-summary: "";
+    in property <bool> mobile-platform: false;
     in-out property <string> status-text: "Initializing…";
     in-out property <string> plugin-path: "";
     in-out property <string> source-arguments: "driver=rtlsdr";
     in-out property <string> frequency-mhz: "154.000";
     in-out property <string> gain-percent: "50";
     in-out property <bool> capture-active: false;
+    private property <bool> compact-layout: root.mobile-platform;
     callback start-requested();
     callback stop-requested();
 
     VerticalBox {
-        padding: 18px;
-        spacing: 14px;
+        padding: root.compact-layout ? 10px : 18px;
+        spacing: root.compact-layout ? 10px : 14px;
 
         Rectangle {
             height: 72px;
@@ -28,14 +28,18 @@ export component AppWindow inherits Window {
             background: #182231;
 
             VerticalBox {
-                padding: 12px;
-                spacing: 4px;
+                padding-left: root.compact-layout ? 12px : 16px;
+                padding-right: root.compact-layout ? 12px : 16px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                spacing: 3px;
 
                 Text {
                     text: root.display-name;
                     color: #f1f5f9;
-                    font-size: 20px;
+                    font-size: root.compact-layout ? 18px : 20px;
                     font-weight: 700;
+                    overflow: elide;
                 }
 
                 Text {
@@ -47,7 +51,7 @@ export component AppWindow inherits Window {
             }
         }
 
-        HorizontalBox {
+        if !root.compact-layout : HorizontalBox {
             spacing: 14px;
 
             Rectangle {
@@ -83,48 +87,28 @@ export component AppWindow inherits Window {
                         font-weight: 700;
                     }
 
-                    Text {
-                        text: "Frequency";
-                        color: #9fb1c5;
-                        font-size: 12px;
-                    }
-
+                    Text { text: "Frequency"; color: #9fb1c5; font-size: 12px; }
                     LineEdit {
                         height: 42px;
                         text <=> root.frequency-mhz;
                         placeholder-text: "Frequency in MHz";
                     }
 
-                    Text {
-                        text: "Source";
-                        color: #9fb1c5;
-                        font-size: 12px;
-                    }
-
+                    Text { text: "Source"; color: #9fb1c5; font-size: 12px; }
                     LineEdit {
                         height: 42px;
                         text <=> root.source-arguments;
                         placeholder-text: "driver=rtlsdr";
                     }
 
-                    Text {
-                        text: "Gain percent";
-                        color: #9fb1c5;
-                        font-size: 12px;
-                    }
-
+                    Text { text: "Gain percent"; color: #9fb1c5; font-size: 12px; }
                     LineEdit {
                         height: 42px;
                         text <=> root.gain-percent;
                         placeholder-text: "0–100";
                     }
 
-                    Text {
-                        text: "Plugin";
-                        color: #9fb1c5;
-                        font-size: 12px;
-                    }
-
+                    Text { text: "Plugin"; color: #9fb1c5; font-size: 12px; }
                     LineEdit {
                         height: 42px;
                         text <=> root.plugin-path;
@@ -138,11 +122,92 @@ export component AppWindow inherits Window {
                         enabled: !root.capture-active;
                         clicked => { root.start-requested(); }
                     }
-
                     Button {
                         text: "Stop";
                         enabled: root.capture-active;
                         clicked => { root.stop-requested(); }
+                    }
+                }
+            }
+        }
+
+        if root.compact-layout : VerticalBox {
+            spacing: 10px;
+
+            Rectangle {
+                vertical-stretch: 1;
+                border-radius: 10px;
+                background: #07090d;
+                border-width: 1px;
+                border-color: #2a3545;
+
+                Image {
+                    x: 8px;
+                    y: 8px;
+                    width: parent.width - 16px;
+                    height: parent.height - 16px;
+                    source: root.video-frame;
+                    image-fit: contain;
+                }
+            }
+
+            Rectangle {
+                height: 178px;
+                background: #182231;
+                border-radius: 10px;
+
+                VerticalBox {
+                    padding: 12px;
+                    spacing: 8px;
+
+                    HorizontalBox {
+                        spacing: 10px;
+
+                        VerticalBox {
+                            horizontal-stretch: 1;
+                            spacing: 4px;
+                            Text { text: "Frequency (MHz)"; color: #9fb1c5; font-size: 12px; }
+                            LineEdit {
+                                height: 46px;
+                                text <=> root.frequency-mhz;
+                                placeholder-text: "154.000";
+                            }
+                        }
+
+                        VerticalBox {
+                            horizontal-stretch: 1;
+                            spacing: 4px;
+                            Text { text: "Gain (%)"; color: #9fb1c5; font-size: 12px; }
+                            LineEdit {
+                                height: 46px;
+                                text <=> root.gain-percent;
+                                placeholder-text: "0–100";
+                            }
+                        }
+                    }
+
+                    Text {
+                        text: root.mobile-platform ? "RTL-SDR over USB" : root.source-arguments;
+                        color: #9fb1c5;
+                        font-size: 11px;
+                        overflow: elide;
+                    }
+
+                    HorizontalBox {
+                        height: 46px;
+                        spacing: 10px;
+                        Button {
+                            horizontal-stretch: 1;
+                            text: root.capture-active ? "Capture active" : "Start capture";
+                            enabled: !root.capture-active;
+                            clicked => { root.start-requested(); }
+                        }
+                        Button {
+                            horizontal-stretch: 1;
+                            text: "Stop";
+                            enabled: root.capture-active;
+                            clicked => { root.stop-requested(); }
+                        }
                     }
                 }
             }

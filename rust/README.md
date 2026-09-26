@@ -18,7 +18,16 @@ Android RTL-SDR plugin.
 
 ## Linux development build
 
-From the repository root:
+The easiest desktop development loop is the repository helper. It builds the
+native core and SoapySDR source plugin, sets the library path, and starts the
+Slint application:
+
+```sh
+tools/run-slint-desktop.sh
+```
+
+Pass `--release` to run the optimized Rust build. The equivalent manual steps
+from the repository root are:
 
 ```sh
 make -C TempestSDR clean all
@@ -43,18 +52,20 @@ cmake -S TempestSDR -B build/android-arm64 \
 cmake --build build/android-arm64
 ```
 
-After the Gradle wrapper has been bootstrapped, the complete arm64 debug APK is
-built with:
+After the Gradle wrapper has been bootstrapped, a debug APK for both physical
+arm64 devices and the x86-64 Android emulator is built with:
 
 ```sh
 ANDROID_SDK_ROOT=/path/to/Android/Sdk tools/build-android.sh
 ```
 
+Use `ANDROID_ABIS=arm64-v8a` or `ANDROID_ABIS=x86_64` to build only one ABI.
 The resulting APK contains the Rust/Slint `NativeActivity`,
 `libTSDRLibrary.so`, and `libTSDRPlugin_RTLSDR.so`. The prototype currently
-builds only `arm64-v8a`, requires Android 8.0 (API 26) or newer, and recognizes
-the common Realtek VID `0x0bda` RTL2832U product IDs. Connect the dongle through
-a USB OTG adapter before starting capture.
+requires Android 8.0 (API 26) or newer and recognizes the common Realtek VID
+`0x0bda` RTL2832U product IDs. Connect the dongle through a USB OTG adapter
+before starting capture. The x86-64 build is intended for GUI testing in the
+Android emulator; USB SDR capture still requires a physical Android device.
 
 The current UI is intentionally fixed to the supplied Dell 2407WFP timing:
 1920×1200 active, 2080×1235 total, 154 MHz pixel clock, and 59.950171 Hz.

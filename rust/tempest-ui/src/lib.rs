@@ -14,6 +14,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     engine.set_display_mode(timing.active_height, timing.refresh_rate_hz)?;
 
     let ui = AppWindow::new()?;
+    ui.set_mobile_platform(cfg!(target_os = "android"));
+    #[cfg(not(target_os = "android"))]
+    ui.window().set_size(slint::LogicalSize::new(1100.0, 760.0));
     ui.set_video_frame(make_test_frame(960, 600));
     ui.set_display_name(timing.name.into());
     ui.set_timing_summary(
