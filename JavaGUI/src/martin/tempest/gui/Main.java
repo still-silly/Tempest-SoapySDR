@@ -10,18 +10,22 @@
  ******************************************************************************/
 package martin.tempest.gui;
 
-import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Container;
+import java.awt.Dimension;
 import java.awt.EventQueue;
+import java.awt.Font;
+import java.awt.GraphicsDevice;
 import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
 import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
-import java.awt.Toolkit;
 
 import javax.imageio.ImageIO;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
+import javax.swing.JComponent;
 import javax.swing.JComboBox;
 import javax.swing.JButton;
 import javax.swing.JLabel;
@@ -65,6 +69,8 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.prefs.Preferences;
 
 import javax.swing.JPanel;
@@ -73,6 +79,11 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JCheckBoxMenuItem;
+import javax.swing.KeyStroke;
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
+import javax.swing.InputMap;
+import javax.swing.SwingUtilities;
 
 public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.IncomingValueCallback, TSDRSourceParamChangedListener, OnTSDRParamChangedCallback {
 	
@@ -107,8 +118,14 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private final SpinnerModel frequency_spinner_model = new SpinnerNumberModel(new Long(prefs.getLong(PREF_FREQ, 400000000)), new Long(0), new Long(2147483647), new Long(FREQUENCY_STEP));
 	
 	private JFrame frmTempestSdr;
-	private JFrame fullscreenframe;
-	private JCheckBoxMenuItem fullscreenVideoItem;
+	private GraphicsDevice fullscreenDevice;
+	private Rectangle applicationWindowedBounds;
+	private Dimension applicationWindowedContentSize;
+	private Map<Component, Rectangle> applicationWindowedComponentBounds;
+	private Map<Component, Font> applicationWindowedFonts;
+	private boolean applicationWindowedResizable;
+	private boolean applicationFullscreen;
+	private JCheckBoxMenuItem fullscreenApplicationItem;
 	private JDialog deviceframe;
 	private JSpinner spWidth;
 	private JSpinner spHeight;
@@ -125,7 +142,6 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private PlotVisualizer line_plotter, frame_plotter;
 	private AutoScaleVisualizer autoScaleVisualizer;
 	//private SNRVisualizer snrLevelVisualizer; to enable snr start by uncommenting this
-	private Rectangle visualizer_bounds;
 	private double framerate = 25;
 	private JTextField txtFramerate;
 	private HoldButton btnLowerFramerate, btnHigherFramerate, btnUp, btnDown, btnLeft, btnRight;
@@ -206,6 +222,22 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 		frmTempestSdr.setFocusable(true);
 		frmTempestSdr.setFocusableWindowState(true);
 		frmTempestSdr.addKeyListener(keyhook);
+		final InputMap fullscreenInputMap = frmTempestSdr.getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+		final ActionMap fullscreenActionMap = frmTempestSdr.getRootPane().getActionMap();
+		fullscreenInputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_F11, 0), "toggleApplicationFullscreen");
+		fullscreenInputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "exitApplicationFullscreen");
+		fullscreenActionMap.put("toggleApplicationFullscreen", new AbstractAction() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				setApplicationFullscreen(!applicationFullscreen);
+			}
+		});
+		fullscreenActionMap.put("exitApplicationFullscreen", new AbstractAction() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				setApplicationFullscreen(false);
+			}
+		});
 		frmTempestSdr.setResizable(false);
 		frmTempestSdr.setTitle("TempestSDR");
 		frmTempestSdr.setBounds(100, 100, 810, 632);
@@ -225,7 +257,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 			@Override
 			public void mouseClicked(MouseEvent e) {
 				if (e.getClickCount() == 2) {
-					setVideoFullscreen(fullscreenframe == null || !fullscreenframe.isVisible());
+					setApplicationFullscreen(!applicationFullscreen);
 				} else
 					visualizer.requestFocus();
 				
@@ -306,14 +338,14 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 		mnTweaks = new JMenu("Tweaks");
 		menuBar.add(mnTweaks);
 
-		fullscreenVideoItem = new JCheckBoxMenuItem("Fullscreen video (F11)");
-		fullscreenVideoItem.addActionListener(new ActionListener() {
+		fullscreenApplicationItem = new JCheckBoxMenuItem("Fullscreen application (F11)");
+		fullscreenApplicationItem.addActionListener(new ActionListener() {
 			@Override
 			public void actionPerformed(ActionEvent e) {
-				setVideoFullscreen(fullscreenVideoItem.isSelected());
+				setApplicationFullscreen(fullscreenApplicationItem.isSelected());
 			}
 		});
-		mnTweaks.add(fullscreenVideoItem);
+		mnTweaks.add(fullscreenApplicationItem);
 		mnTweaks.addSeparator();
 		
 		mntmTakeSnapshot = new JMenuItem("Take snapshot");
@@ -676,17 +708,6 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 		onGainLevelChanged();
 		onMotionBlurLevelChanged();
 		
-		// full screen frame
-		fullscreenframe = new JFrame("Video display");
-		fullscreenframe.setFocusable(true);
-		fullscreenframe.addKeyListener(keyhook);
-		Toolkit tk = Toolkit.getDefaultToolkit();  
-		int xSize = ((int) tk.getScreenSize().getWidth());  
-		int ySize = ((int) tk.getScreenSize().getHeight());  
-		fullscreenframe.setSize(xSize,ySize);
-		fullscreenframe.setUndecorated(true);
-		fullscreenframe.setLocation(0, 0);
-		
 		pnInputDeviceSettings = new JPanel();
 		pnInputDeviceSettings.setBounds(10, 68, 551, 74);
 		pnInputDeviceSettings.setLayout(null);
@@ -938,15 +959,6 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private void onKeyboardKeyPressed(final KeyEvent e) {
 		final int keycode = e.getKeyCode();
 
-		if (keycode == KeyEvent.VK_F11) {
-			setVideoFullscreen(fullscreenframe == null || !fullscreenframe.isVisible());
-			return;
-		}
-		if (keycode == KeyEvent.VK_ESCAPE && fullscreenframe != null && fullscreenframe.isVisible()) {
-			setVideoFullscreen(false);
-			return;
-		}
-
 		if (e.isShiftDown()) {
 			switch (keycode) {
 			case KeyEvent.VK_LEFT:
@@ -984,37 +996,124 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 		}
 	}
 
-	/** Move the video view between the main window and an undecorated full-screen window. */
-	private void setVideoFullscreen(final boolean fullscreen) {
-		if (fullscreenframe == null || visualizer == null)
+	private void captureApplicationComponent(final Component component) {
+		applicationWindowedComponentBounds.put(component, component.getBounds());
+		applicationWindowedFonts.put(component, component.getFont());
+		if (component instanceof Container) {
+			for (final Component child : ((Container) component).getComponents())
+				captureApplicationComponent(child);
+		}
+	}
+
+	private void captureApplicationLayout() {
+		final Container content = frmTempestSdr.getContentPane();
+		applicationWindowedContentSize = content.getSize();
+		if (applicationWindowedContentSize.width <= 0 || applicationWindowedContentSize.height <= 0) {
+			final Insets insets = frmTempestSdr.getInsets();
+			final Rectangle bounds = frmTempestSdr.getBounds();
+			applicationWindowedContentSize = new Dimension(
+					Math.max(1, bounds.width - insets.left - insets.right),
+					Math.max(1, bounds.height - insets.top - insets.bottom));
+		}
+		applicationWindowedComponentBounds = new IdentityHashMap<Component, Rectangle>();
+		applicationWindowedFonts = new IdentityHashMap<Component, Font>();
+		captureApplicationComponent(content);
+	}
+
+	private void scaleApplicationLayout() {
+		if (!applicationFullscreen || applicationWindowedContentSize == null
+				|| applicationWindowedComponentBounds == null)
+			return;
+
+		final Container content = frmTempestSdr.getContentPane();
+		final double scaleX = content.getWidth() / (double) applicationWindowedContentSize.width;
+		final double scaleY = content.getHeight() / (double) applicationWindowedContentSize.height;
+		final double fontScale = Math.min(scaleX, scaleY);
+		if (scaleX <= 0 || scaleY <= 0)
+			return;
+
+		for (final Map.Entry<Component, Rectangle> entry : applicationWindowedComponentBounds.entrySet()) {
+			final Component component = entry.getKey();
+			if (component == content)
+				continue;
+			final Rectangle bounds = entry.getValue();
+			component.setBounds(
+					(int) Math.round(bounds.x * scaleX),
+					(int) Math.round(bounds.y * scaleY),
+					(int) Math.round(bounds.width * scaleX),
+					(int) Math.round(bounds.height * scaleY));
+			final Font font = applicationWindowedFonts.get(component);
+			if (font != null)
+				component.setFont(font.deriveFont((float) Math.max(1.0, font.getSize2D() * fontScale)));
+		}
+		content.revalidate();
+		content.repaint();
+	}
+
+	private void restoreApplicationLayout() {
+		if (applicationWindowedComponentBounds == null)
+			return;
+		for (final Map.Entry<Component, Rectangle> entry : applicationWindowedComponentBounds.entrySet()) {
+			final Component component = entry.getKey();
+			component.setBounds(entry.getValue());
+			final Font font = applicationWindowedFonts.get(component);
+			if (font != null)
+				component.setFont(font);
+		}
+		final Container content = frmTempestSdr.getContentPane();
+		content.revalidate();
+		content.repaint();
+	}
+
+	/** Toggle the complete TempestSDR window between windowed and full-screen modes. */
+	private void setApplicationFullscreen(final boolean fullscreen) {
+		if (frmTempestSdr == null || fullscreen == applicationFullscreen)
 			return;
 
 		if (fullscreen) {
-			if (fullscreenframe.isVisible())
-				return;
+			frmTempestSdr.validate();
+			captureApplicationLayout();
+			applicationWindowedBounds = frmTempestSdr.getBounds();
+			applicationWindowedResizable = frmTempestSdr.isResizable();
+			if (frmTempestSdr.getGraphicsConfiguration() != null)
+				fullscreenDevice = frmTempestSdr.getGraphicsConfiguration().getDevice();
+			if (fullscreenDevice == null)
+				fullscreenDevice = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
 
-			visualizer_bounds = visualizer.getBounds();
-			frmTempestSdr.getContentPane().remove(visualizer);
-			fullscreenframe.getContentPane().add(visualizer, BorderLayout.CENTER);
-			fullscreenframe.validate();
-			fullscreenframe.setVisible(true);
-			visualizer.requestFocusInWindow();
+			/* Keep the frame displayable. Disposing it here invalidates dialog owners and
+			 * causes the device settings popup to stop working after fullscreen. */
+			applicationFullscreen = true;
+			if (fullscreenDevice.isFullScreenSupported()) {
+				fullscreenDevice.setFullScreenWindow(frmTempestSdr);
+			} else {
+				frmTempestSdr.setResizable(true);
+				frmTempestSdr.setBounds(fullscreenDevice.getDefaultConfiguration().getBounds());
+			}
+			frmTempestSdr.validate();
+			SwingUtilities.invokeLater(new Runnable() {
+				@Override
+				public void run() {
+					if (applicationFullscreen)
+						scaleApplicationLayout();
+					frmTempestSdr.requestFocusInWindow();
+				}
+			});
 		} else {
-			if (visualizer.getParent() != fullscreenframe.getContentPane())
-				return;
+			if (fullscreenDevice != null && fullscreenDevice.getFullScreenWindow() == frmTempestSdr)
+				fullscreenDevice.setFullScreenWindow(null);
 
-			fullscreenframe.setVisible(false);
-			fullscreenframe.getContentPane().remove(visualizer);
-			if (visualizer_bounds != null)
-				visualizer.setBounds(visualizer_bounds);
-			frmTempestSdr.getContentPane().add(visualizer);
-			frmTempestSdr.getContentPane().revalidate();
-			frmTempestSdr.getContentPane().repaint();
+			applicationFullscreen = false;
+			if (applicationWindowedBounds != null)
+				frmTempestSdr.setBounds(applicationWindowedBounds);
+			frmTempestSdr.setResizable(applicationWindowedResizable);
+			frmTempestSdr.validate();
+			restoreApplicationLayout();
+			frmTempestSdr.repaint();
 			frmTempestSdr.requestFocusInWindow();
 		}
 
-		if (fullscreenVideoItem != null)
-			fullscreenVideoItem.setSelected(fullscreen);
+		if (fullscreenApplicationItem != null)
+			fullscreenApplicationItem.setSelected(applicationFullscreen);
 	}
 	
 	private void onKeyboardKeyReleased(final KeyEvent e) {

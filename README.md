@@ -19,17 +19,21 @@ Release
 
 Double click on the JTempestSDR.jar file to launch. If it fails to launch, you will need to recompile the project.
 
-### Video display controls
+### Fullscreen application controls
 
-The video preview can be moved into an undecorated full-screen display. Use any
+The complete TempestSDR application can be moved into a full-screen display,
+keeping the controls and video preview together. The existing controls are
+scaled to the new content area and restored when leaving fullscreen. Use any
 of the following to toggle it:
 
  * Double-click the video preview.
- * Select **Tweaks → Fullscreen video (F11)**.
- * Press **F11** while the application or video preview has focus.
+ * Select **Tweaks → Fullscreen application (F11)**.
+ * Press **F11** while the application has focus.
 
 Press **Escape** to return to the normal window. Fullscreen mode enlarges the
-video preview; the control panel remains in the main application window.
+whole application window rather than moving only the video preview. The main
+frame remains alive during the transition so its device settings and other
+popup windows continue to work.
 
 
 Building the executable
@@ -134,8 +138,12 @@ You need to have MinGW installed and gcc and make commands need to be in your pa
 This checkout adds a generic Linux SoapySDR plugin. Install SoapySDR, a matching
 device module, and the device vendor API. For an RSP1A, install SDRplay API v3
 and SoapySDRPlay3, then enter `driver=sdrplay` in the SoapySDR source settings.
-The plugin requests a receive bandwidth matching the selected sample rate; this
-is important because the SDRplay module otherwise defaults to a 200 kHz filter.
+For an RTL-SDR, use `driver=rtlsdr` (add `,serial=...` when needed). The plugin
+starts at 2 MS/s, requests a receive bandwidth equal to the sample rate, maps
+the GUI's normalized gain to the device range, and streams complex float
+samples. See [`TSDRPlugin_Soapy/README`](TSDRPlugin_Soapy/README) for sample
+rate suggestions and troubleshooting.
+
 For 1920x1200 displays, the GUI also provides a reduced-blanking mode
 (`1920x1200 @ 60Hz (reduced blanking)`) using 2080x1235 total timing.
 

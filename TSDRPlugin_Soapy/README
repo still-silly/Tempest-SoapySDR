@@ -13,19 +13,75 @@ Installation:
 2. Build this plugin by running 'make' in this directory
 3. Copy the built library to the appropriate plugin directory
 
-Parameters:
-The plugin accepts SoapySDR device arguments in the format "key1=value1,key2=value2".
+Device selection
+----------------
 
-Supported parameters:
-- driver: Soapy driver name (recommended; e.g. `sdrplay` or `rtlsdr`)
-- serial: device serial number (optional)
-- any additional arguments accepted by the selected SoapySDR module
+The source settings field accepts SoapySDR device arguments in the format
+`key1=value1,key2=value2`. These arguments select the hardware; sample rate,
+frequency, and gain are configured by TempestSDR after the device opens.
 
 Examples:
-driver=sdrplay
-driver=rtlsdr,serial=12345678
 
-Default settings:
-- Sample rate: 2.0 MHz
-- Frequency: 400 MHz
-- Gain: normalized 0.0-1.0, mapped to the device's overall gain range
+    # SDRplay RSP1A (SoapySDRPlay3)
+    driver=sdrplay
+
+    # RTL-SDR, optionally selecting a particular dongle
+    driver=rtlsdr
+    driver=rtlsdr,serial=12345678
+
+The SDRplay API and the SoapySDRPlay3 module are separate dependencies. An
+installed SDRplay API service alone does not make `driver=sdrplay` available.
+
+Sample parameters
+-----------------
+
+The current plugin starts at these values:
+
+| Parameter | Current behavior |
+| --- | --- |
+| Sample rate | 2.0 MS/s; the hardware's accepted rate is read back |
+| Receive bandwidth | Set to the selected sample rate (prevents the SDRplay module's narrow default filter) |
+| Center frequency | 400 MHz until the GUI changes it |
+| Gain | GUI value is normalized 0.0-1.0 and mapped to the device gain range |
+| Stream format | Complex 32-bit float (`CF32`) |
+
+Useful starting points by device:
+
+| Device | Selector | Rates to try | Notes |
+| --- | --- | --- | --- |
+| SDRplay RSP1A | `driver=sdrplay` | 2 MS/s, then 4/6/8 MS/s if accepted | Keep bandwidth wide enough for the display sideband. |
+| RTL-SDR | `driver=rtlsdr` | 2.048 or 2.4 MS/s | The exact rate limits depend on the tuner/driver. |
+
+The GUI does not yet expose a sample-rate selector, so alternate rates
+currently require changing the plugin default and rebuilding.
+
+Implementation notes
+--------------------
+
+The plugin passes device arguments through unchanged, configures rate,
+bandwidth, frequency, and gain before creating the stream, and delays stream
+setup until TempestSDR starts capture. This lets the GUI apply its settings
+before drivers that reject changes to an active stream. Gain mode/AGC is
+disabled when the backend exposes it so the manual gain slider has an effect.
+An SDR overflow resets TempestSDR's synchronisation state before samples are
+accepted again.
+
+Troubleshooting `SoapySDR::Device::make() no match`
+----------------------------------------------------
+
+This error means that SoapySDR could not find a matching backend or device. It
+occurs before TempestSDR applies frequency, rate, or gain settings.
+
+    SoapySDRUtil --info
+    SoapySDRUtil --probe="driver=sdrplay"
+    SoapySDRUtil --probe="driver=rtlsdr"
+
+The first command should list the corresponding Soapy module. For an RSP1A,
+also verify USB visibility and restart the vendor service if needed:
+
+    lsusb -d 1df7:
+    sudo systemctl restart sdrplay_apiService
+
+If a module was installed outside the standard path, point SoapySDR at it with
+`SOAPY_SDR_PLUGIN_PATH=/path/to/modules`. Reconnect the radio and check the
+USB cable/port if `lsusb` shows no SDRplay device.
