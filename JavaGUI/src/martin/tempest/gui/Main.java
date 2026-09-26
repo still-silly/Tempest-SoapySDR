@@ -79,6 +79,8 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JRadioButtonMenuItem;
+import javax.swing.ButtonGroup;
 import javax.swing.KeyStroke;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
@@ -95,6 +97,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	
 	private final static int FRAMERATE_SIGNIFICANT_FIGURES = 8;
 	private final static long FREQUENCY_STEP = 5000000;
+	private final static long[] SAMPLE_RATES = new long[] {2000000L, 2048000L, 2400000L, 4000000L, 6000000L, 8000000L};
 	
 	private final static double FRAMERATE_MIN_CHANGE = 1.0/Math.pow(10, FRAMERATE_SIGNIFICANT_FIGURES);
 	private final static String FRAMERATE_FORMAT = "%."+FRAMERATE_SIGNIFICANT_FIGURES+"f";
@@ -106,6 +109,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private final static String PREF_FRAMERATE = "framerate";
 	private final static String PREF_COMMAND_PREFIX = "command";
 	private final static String PREF_FREQ = "frequency";
+	private final static String PREF_SAMPLE_RATE = "sample_rate";
 	private final static String PREF_GAIN = "gain";
 	private final static String PREF_MOTIONBLUR = "motionblur";
 	private final static String PREF_HEIGHT_LOCK = "height_lock";
@@ -126,6 +130,10 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private boolean applicationWindowedResizable;
 	private boolean applicationFullscreen;
 	private JCheckBoxMenuItem fullscreenApplicationItem;
+	private JMenu sampleRateMenu;
+	private JRadioButtonMenuItem[] sampleRateItems;
+	private long selectedSampleRate;
+	private TSDRSource currentSource;
 	private JDialog deviceframe;
 	private JSpinner spWidth;
 	private JSpinner spHeight;
@@ -217,6 +225,11 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 		final double framerate_initial = prefs.getDouble(PREF_FRAMERATE, framerate);
 		final int closest_videomode_id = VideoMode.findClosestVideoModeId(width_initial, height_initial, framerate_initial, videomodes);
 		final boolean heightlock_enabled = prefs.getBoolean(PREF_HEIGHT_LOCK, true);
+		selectedSampleRate = prefs.getLong(PREF_SAMPLE_RATE, SAMPLE_RATES[0]);
+		boolean knownSampleRate = false;
+		for (final long sampleRate : SAMPLE_RATES)
+			if (sampleRate == selectedSampleRate) knownSampleRate = true;
+		if (!knownSampleRate) selectedSampleRate = SAMPLE_RATES[0];
 		
 		frmTempestSdr = new JFrame();
 		frmTempestSdr.setFocusable(true);
@@ -346,6 +359,27 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 			}
 		});
 		mnTweaks.add(fullscreenApplicationItem);
+
+		sampleRateMenu = new JMenu("Sample rate");
+		sampleRateMenu.setToolTipText("Select the SoapySDR device sample rate while stopped");
+		sampleRateItems = new JRadioButtonMenuItem[SAMPLE_RATES.length];
+		final ButtonGroup sampleRateGroup = new ButtonGroup();
+		for (int i = 0; i < SAMPLE_RATES.length; i++) {
+			final long sampleRate = SAMPLE_RATES[i];
+			final JRadioButtonMenuItem item = new JRadioButtonMenuItem(formatSampleRate(sampleRate));
+			item.setSelected(sampleRate == selectedSampleRate);
+			item.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					onSampleRateSelected(sampleRate);
+				}
+			});
+			sampleRateGroup.add(item);
+			sampleRateItems[i] = item;
+			sampleRateMenu.add(item);
+		}
+		sampleRateMenu.setEnabled(false);
+		mnTweaks.add(sampleRateMenu);
 		mnTweaks.addSeparator();
 		
 		mntmTakeSnapshot = new JMenuItem("Take snapshot");
@@ -903,6 +937,39 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 			displayException(frmTempestSdr, e);
 		}
 	}
+
+	private static String formatSampleRate(final long sampleRate) {
+		return String.format("%.3f MS/s", sampleRate / 1000000.0d);
+	}
+
+	private void updateSampleRateMenuSelection() {
+		if (sampleRateItems == null)
+			return;
+		for (int i = 0; i < sampleRateItems.length; i++)
+			sampleRateItems[i].setSelected(SAMPLE_RATES[i] == selectedSampleRate);
+	}
+
+	private void setSampleRateMenuEnabled(final boolean enabled) {
+		if (sampleRateMenu != null)
+			sampleRateMenu.setEnabled(enabled && currentSource != null && currentSource.supportsSampleRateSelection());
+	}
+
+	private void onSampleRateSelected(final long sampleRate) {
+		if (currentSource == null || !currentSource.supportsSampleRateSelection() || mSdrlib.isRunning())
+			return;
+
+		final long previousSampleRate = selectedSampleRate;
+		selectedSampleRate = sampleRate;
+		try {
+			mSdrlib.setSampleRate(sampleRate);
+			prefs.putLong(PREF_SAMPLE_RATE, sampleRate);
+			visualizer.setOSD("Sample rate: " + formatSampleRate(sampleRate), OSD_TIME);
+		} catch (TSDRException e) {
+			selectedSampleRate = previousSampleRate;
+			updateSampleRateMenuSelection();
+			displayException(frmTempestSdr, e);
+		}
+	}
 	
 	private void onGainLevelChanged() {
 		float gain = (slGain.getValue() - slGain.getMinimum()) / (float) (slGain.getMaximum() - slGain.getMinimum());
@@ -1177,6 +1244,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private void setPluginMenuEnabled(boolean value) {
 		for (int i = 0; i < souces_menues.length; i++)
 			souces_menues[i].setEnabled(value);
+		setSampleRateMenuEnabled(value && !mSdrlib.isRunning());
 	}
 	
 	private int roundData(double height) {
@@ -1184,6 +1252,8 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	}
 	
 	private void onPluginSelected(final TSDRSource current) {
+		currentSource = current;
+		setSampleRateMenuEnabled(false);
 		
 		if (!mSdrlib.isRunning()) btnStartStop.setEnabled(false);
 		try {
@@ -1301,8 +1371,11 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 			} catch (TSDRLoadPluginException e) {};
 			
 			mSdrlib.loadPlugin(source);
+			if (source.supportsSampleRateSelection())
+				mSdrlib.setSampleRate(selectedSampleRate);
 		} catch (Throwable t) {
 			if (!mSdrlib.isRunning())  btnStartStop.setEnabled(false);
+			currentSource = null;
 			displayException(frmTempestSdr, t);
 			setPluginMenuEnabled(true);
 			return;

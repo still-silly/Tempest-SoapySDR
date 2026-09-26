@@ -181,6 +181,11 @@ JNIEXPORT void JNICALL Java_martin_tempest_core_TSDRLibrary_setBaseFreq (JNIEnv 
 	THROW(tsdr_setbasefreq(tsdr_instance, (uint32_t) freq));
 }
 
+JNIEXPORT void JNICALL Java_martin_tempest_core_TSDRLibrary_setSampleRate (JNIEnv * env, jobject obj, jlong samplerate) {
+	if (tsdr_instance == NULL) return;
+	THROW(tsdr_setsamplerate(tsdr_instance, (uint32_t) samplerate));
+}
+
 void read_async(float *buf, int width, int height, void *ctx) {
 	java_context_t * context = (java_context_t *) ctx;
 	JNIEnv *env;

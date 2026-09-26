@@ -185,12 +185,34 @@ static inline void announceexception(tsdr_lib_t * tsdr, const char * message, in
 
 	if (tsdr->samplerate_real == 0 || tsdr->samplerate_real > 500e6) RETURN_EXCEPTION(tsdr, "Invalid/unsupported value for sample rate.", TSDR_SAMPLE_RATE_WRONG);
 
-	set_internal_samplerate(tsdr, tsdr->samplerate_real);
+	if (tsdr->height > 0 && tsdr->refreshrate > 0)
+		set_internal_samplerate(tsdr, tsdr->samplerate_real);
 
 	RETURN_OK(tsdr);
 
 	return 0; // to avoid getting warning from stupid Eclpse
-}
+ }
+
+ int tsdr_setsamplerate(tsdr_lib_t * tsdr, uint32_t samplerate) {
+	if (tsdr->nativerunning || tsdr->running)
+		RETURN_EXCEPTION(tsdr, "Cannot change sample rate while the library is running.", TSDR_ALREADY_RUNNING);
+	if (!tsdr->plugin.initialized)
+		RETURN_EXCEPTION(tsdr, "Cannot change sample rate. Plugin not loaded yet.", TSDR_ERR_PLUGIN);
+	if (samplerate == 0 || samplerate > MAX_SAMP_RATE)
+		RETURN_EXCEPTION(tsdr, "Invalid/unsupported value for sample rate.", TSDR_SAMPLE_RATE_WRONG);
+
+	/* The plugin returns the rate it actually accepted (drivers may round it). */
+	tsdr->samplerate_real = tsdr->plugin.tsdrplugin_setsamplerate(samplerate);
+	if (tsdr->samplerate_real == 0 || tsdr->samplerate_real > MAX_SAMP_RATE)
+		RETURN_EXCEPTION(tsdr, tsdr->plugin.tsdrplugin_getlasterrortext() != NULL
+				? tsdr->plugin.tsdrplugin_getlasterrortext()
+				: "The plugin rejected the requested sample rate.", TSDR_SAMPLE_RATE_WRONG);
+	if (tsdr->height > 0 && tsdr->refreshrate > 0)
+		set_internal_samplerate(tsdr, tsdr->samplerate_real);
+	RETURN_OK(tsdr);
+
+	return 0; // to avoid getting warning from stupid Eclpse
+ }
 
  int tsdr_setbasefreq(tsdr_lib_t * tsdr, uint32_t freq) {
 	tsdr->centfreq = freq;

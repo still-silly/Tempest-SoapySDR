@@ -212,6 +212,9 @@ public class TSDRLibrary {
 	
 	/** Set the tuned frequency */
 	public native void setBaseFreq(long freq) throws TSDRException;
+
+	/** Set the device sample rate while a plugin is loaded but stopped. */
+	public native void setSampleRate(long samplerate) throws TSDRException;
 	
 	/**
 	 * Load a plugin so that it is ready to be started via {@link #nativeStart()}

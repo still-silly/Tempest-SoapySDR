@@ -184,7 +184,12 @@ EXTERNC TSDRPLUGIN_API uint32_t __stdcall tsdrplugin_setsamplerate(uint32_t rate
 	req_rate = rate;
 
 	if (device != NULL) {
-		SoapySDRDevice_setSampleRate(device, SOAPY_SDR_RX, 0, req_rate);
+		const int ret = SoapySDRDevice_setSampleRate(device, SOAPY_SDR_RX, 0, req_rate);
+		if (ret != 0) {
+			const char *error = SoapySDRDevice_lastError();
+			announceexception(error ? error : "Failed to set sample rate", TSDR_SAMPLE_RATE_WRONG);
+			return 0;
+		}
 		req_rate = SoapySDRDevice_getSampleRate(device, SOAPY_SDR_RX, 0);
 		apply_bandwidth();
 	}

@@ -61,6 +61,7 @@
 	void tsdr_init(tsdr_lib_t ** tsdr, tsdr_value_changed_callback callback, tsdr_on_plot_ready_callback plotready_callback, void * ctx);
 	void * tsdr_getctx(tsdr_lib_t * tsdr);
 	int tsdr_setbasefreq(tsdr_lib_t * tsdr, uint32_t freq);
+	int tsdr_setsamplerate(tsdr_lib_t * tsdr, uint32_t samplerate);
 	int tsdr_stop(tsdr_lib_t * tsdr);
 	int tsdr_setgain(tsdr_lib_t * tsdr, float gain);
 	int tsdr_readasync(tsdr_lib_t * tsdr, tsdr_readasync_function cb, void * ctx);

@@ -105,6 +105,11 @@ public class TSDRSource {
 	public String getParams() {
 		return params;
 	}
+
+	/** Whether the GUI may offer a device sample-rate selector for this source. */
+	public boolean supportsSampleRateSelection() {
+		return false;
+	}
 	
 	@Override
 	public String toString() {
