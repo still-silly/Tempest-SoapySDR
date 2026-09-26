@@ -141,8 +141,10 @@ and SoapySDRPlay3, then enter `driver=sdrplay` in the SoapySDR source settings.
 For an RTL-SDR, use `driver=rtlsdr` (add `,serial=...` when needed). The plugin
 starts at 2 MS/s, requests a receive bandwidth equal to the sample rate, maps
 the GUI's normalized gain to the device range, and streams complex float
-samples. See [`TSDRPlugin_Soapy/README`](TSDRPlugin_Soapy/README) for sample
-rate suggestions and troubleshooting.
+samples. Once the SoapySDR source is loaded and stopped, choose a rate from
+**Tweaks → Sample rate**; the default remains 2 MS/s. See
+[`TSDRPlugin_Soapy/README`](TSDRPlugin_Soapy/README) for sample-rate
+suggestions and troubleshooting.
 
 For 1920x1200 displays, the GUI also provides a reduced-blanking mode
 (`1920x1200 @ 60Hz (reduced blanking)`) using 2080x1235 total timing.

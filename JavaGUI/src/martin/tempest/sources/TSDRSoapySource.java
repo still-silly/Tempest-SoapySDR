@@ -25,6 +25,11 @@ public class TSDRSoapySource extends TSDRSource {
 	}
 
 	@Override
+	public boolean supportsSampleRateSelection() {
+		return true;
+	}
+
+	@Override
 	public boolean populateGUI(final Container cont, final String defaultprefs, final ActionListenerRegistrator okbutton) {
 		final String prefs = (defaultprefs == null || defaultprefs.trim().isEmpty())
 				? "driver=sdrplay" : defaultprefs;
