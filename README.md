@@ -1,5 +1,7 @@
 TempestSDR
-=============
+==========
+
+[![Build](https://github.com/still-silly/Tempest-SoapySDR/actions/workflows/build.yml/badge.svg)](https://github.com/still-silly/Tempest-SoapySDR/actions/workflows/build.yml)
 
 This project is a software toolkit for remotely eavesdropping video monitors using a Software Defined Radio (SDR) receiver. It exploits compromising emanations from cables carrying video signals.
 
@@ -132,4 +134,3 @@ that TempestSDR receives complex samples:
     SOAPY_SDR_PLUGIN_PATH=/path/to/SoapySDRPlay3/build \
       tools/soapy_plugin_smoke TSDRPlugin_Soapy/bin/LINUX/X64/libTSDRPlugin_Soapy.so \
       'driver=sdrplay'
-

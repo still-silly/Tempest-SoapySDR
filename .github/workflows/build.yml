@@ -1,0 +1,60 @@
+name: Build Tempest SoapySDR
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install native dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libboost-program-options-dev \
+            libboost-thread-dev \
+            libsoapysdr-dev \
+            libuhd-dev \
+            pkg-config
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build SoapySDR plugin
+        run: make -C TSDRPlugin_Soapy clean all
+
+      - name: Build smoke tests
+        run: make -C tools clean all
+
+      - name: Build Java bundle
+        run: make -C JavaGUI clean all JAVA_HOME="$JAVA_HOME"
+
+      - name: Verify artifacts
+        run: |
+          test -f TSDRPlugin_Soapy/bin/LINUX/X64/libTSDRPlugin_Soapy.so
+          test -x tools/soapy_plugin_smoke
+          test -f JavaGUI/JTempestSDR.jar
+          jar tf JavaGUI/JTempestSDR.jar | grep -F 'lib/LINUX/X64/libTSDRPlugin_Soapy.so'
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tempest-soapy-linux
+          if-no-files-found: error
+          path: |
+            JavaGUI/JTempestSDR.jar
+            TSDRPlugin_Soapy/bin/LINUX/X64/libTSDRPlugin_Soapy.so
+            tools/soapy_plugin_smoke
