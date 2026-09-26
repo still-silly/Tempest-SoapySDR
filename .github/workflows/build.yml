@@ -48,6 +48,8 @@ jobs:
 
       - name: Verify Windows artifacts
         run: |
+          export JAVA_HOME="$(cygpath -u "$JAVA_HOME")"
+          export PATH="$JAVA_HOME/bin:$PATH"
           test -f JavaGUI/JTempestSDR.jar
           jar tf JavaGUI/JTempestSDR.jar | grep -F 'lib/WINDOWS/X64/TSDRLibraryNDK.dll'
           jar tf JavaGUI/JTempestSDR.jar | grep -F 'lib/WINDOWS/X64/TSDRPlugin_Soapy.dll'
