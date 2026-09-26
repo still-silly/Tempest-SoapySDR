@@ -40,6 +40,7 @@ jobs:
       - name: Build Windows application bundle
         run: |
           export JAVA_HOME="$(cygpath -u "$JAVA_HOME")"
+          export PATH="$JAVA_HOME/bin:$PATH"
           make -C JavaGUI clean all \
             OSNAME=WINDOWS ARCHNAME=X64 \
             WITH_SOAPY=1 \
