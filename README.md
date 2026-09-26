@@ -19,17 +19,18 @@ Release
 
 Double click on the JTempestSDR.jar file to launch. If it fails to launch, you will need to recompile the project.
 
-### Video display controls
+### Fullscreen application controls
 
-The video preview can be moved into an undecorated full-screen display. Use any
+The complete TempestSDR application can be moved into an undecorated
+full-screen display, keeping the controls and video preview together. Use any
 of the following to toggle it:
 
  * Double-click the video preview.
- * Select **Tweaks → Fullscreen video (F11)**.
- * Press **F11** while the application or video preview has focus.
+ * Select **Tweaks → Fullscreen application (F11)**.
+ * Press **F11** while the application has focus.
 
 Press **Escape** to return to the normal window. Fullscreen mode enlarges the
-video preview; the control panel remains in the main application window.
+whole application window rather than moving only the video preview.
 
 
 Building the executable
