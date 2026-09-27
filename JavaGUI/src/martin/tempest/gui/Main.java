@@ -134,6 +134,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	private JRadioButtonMenuItem[] sampleRateItems;
 	private long selectedSampleRate;
 	private TSDRSource currentSource;
+	private boolean sourcePluginLoaded;
 	private JDialog deviceframe;
 	private JSpinner spWidth;
 	private JSpinner spHeight;
@@ -361,7 +362,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 		mnTweaks.add(fullscreenApplicationItem);
 
 		sampleRateMenu = new JMenu("Sample rate");
-		sampleRateMenu.setToolTipText("Select the SoapySDR device sample rate while stopped");
+		sampleRateMenu.setToolTipText("Choose the preferred SoapySDR sample rate; applied when a device is opened");
 		sampleRateItems = new JRadioButtonMenuItem[SAMPLE_RATES.length];
 		final ButtonGroup sampleRateGroup = new ButtonGroup();
 		for (int i = 0; i < SAMPLE_RATES.length; i++) {
@@ -378,7 +379,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 			sampleRateItems[i] = item;
 			sampleRateMenu.add(item);
 		}
-		sampleRateMenu.setEnabled(false);
+		sampleRateMenu.setEnabled(true);
 		mnTweaks.add(sampleRateMenu);
 		mnTweaks.addSeparator();
 		
@@ -951,24 +952,27 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 
 	private void setSampleRateMenuEnabled(final boolean enabled) {
 		if (sampleRateMenu != null)
-			sampleRateMenu.setEnabled(enabled && currentSource != null && currentSource.supportsSampleRateSelection());
+			sampleRateMenu.setEnabled(enabled && !mSdrlib.isRunning());
 	}
 
 	private void onSampleRateSelected(final long sampleRate) {
-		if (currentSource == null || !currentSource.supportsSampleRateSelection() || mSdrlib.isRunning())
+		if (mSdrlib.isRunning())
 			return;
 
 		final long previousSampleRate = selectedSampleRate;
 		selectedSampleRate = sampleRate;
-		try {
-			mSdrlib.setSampleRate(sampleRate);
-			prefs.putLong(PREF_SAMPLE_RATE, sampleRate);
-			visualizer.setOSD("Sample rate: " + formatSampleRate(sampleRate), OSD_TIME);
-		} catch (TSDRException e) {
-			selectedSampleRate = previousSampleRate;
-			updateSampleRateMenuSelection();
-			displayException(frmTempestSdr, e);
+		if (sourcePluginLoaded && currentSource != null && currentSource.supportsSampleRateSelection()) {
+			try {
+				mSdrlib.setSampleRate(sampleRate);
+			} catch (TSDRException e) {
+				selectedSampleRate = previousSampleRate;
+				updateSampleRateMenuSelection();
+				displayException(frmTempestSdr, e);
+				return;
+			}
 		}
+		prefs.putLong(PREF_SAMPLE_RATE, sampleRate);
+		visualizer.setOSD("Sample rate: " + formatSampleRate(sampleRate), OSD_TIME);
 	}
 	
 	private void onGainLevelChanged() {
@@ -1253,7 +1257,8 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	
 	private void onPluginSelected(final TSDRSource current) {
 		currentSource = current;
-		setSampleRateMenuEnabled(false);
+		sourcePluginLoaded = false;
+		setSampleRateMenuEnabled(true);
 		
 		if (!mSdrlib.isRunning()) btnStartStop.setEnabled(false);
 		try {
@@ -1363,6 +1368,7 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	@Override
 	public void onParametersChanged(TSDRSource source) {
 		setPluginMenuEnabled(false);
+		sourcePluginLoaded = false;
 		if (!mSdrlib.isRunning())  btnStartStop.setEnabled(false);
 		
 		try {
@@ -1373,9 +1379,13 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 			mSdrlib.loadPlugin(source);
 			if (source.supportsSampleRateSelection())
 				mSdrlib.setSampleRate(selectedSampleRate);
+			sourcePluginLoaded = true;
 		} catch (Throwable t) {
 			if (!mSdrlib.isRunning())  btnStartStop.setEnabled(false);
-			currentSource = null;
+			try {
+				mSdrlib.unloadPlugin();
+			} catch (Throwable ignored) {}
+			sourcePluginLoaded = false;
 			displayException(frmTempestSdr, t);
 			setPluginMenuEnabled(true);
 			return;

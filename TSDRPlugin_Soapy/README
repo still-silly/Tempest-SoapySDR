@@ -1,17 +1,34 @@
 TSDR Plugin for SoapySDR
 
-This plugin provides Linux receive support for devices exposed through the SoapySDR
-abstraction layer, including RTL-SDR and SDRplay devices with their corresponding
-SoapySDR modules installed.
+This plugin provides receive support for devices exposed through the SoapySDR
+abstraction layer, including RTL-SDR and SDRplay devices when their corresponding
+SoapySDR modules are installed. Linux is the primary tested platform; a Windows
+build is available through the MSYS2 UCRT64 toolchain and is being brought up in
+CI.
 
 Requirements:
 - SoapySDR library (https://github.com/pothosware/SoapySDR)
 - A device module, such as SoapyRTLSDR or SoapySDRPlay3
 
+Windows requirements:
+- A 64-bit SoapySDR runtime and the device module for your radio
+- The SoapySDR runtime DLL and module directory available to the application
+  (PATH / SoapySDR module search configuration)
+- For an RSP1A, the SDRplay API and SoapySDRPlay3 module; these are separate from
+  the TempestSDR plugin
+
 Installation:
 1. Install SoapySDR and the RTL-SDR module
 2. Build this plugin by running 'make' in this directory
 3. Copy the built library to the appropriate plugin directory
+
+Windows build (from an MSYS2 UCRT64 shell with the SoapySDR package installed):
+
+    make OSNAME=WINDOWS ARCHNAME=X64
+
+To include the plugin in a Windows Java bundle, build JavaGUI with
+`WITH_SOAPY=1`. The Windows GUI build is opt-in so existing Windows builds do not
+gain a SoapySDR build dependency unless requested.
 
 Device selection
 ----------------
@@ -52,9 +69,12 @@ Useful starting points by device:
 | SDRplay RSP1A | `driver=sdrplay` | 2 MS/s, then 4/6/8 MS/s if accepted | Keep bandwidth wide enough for the display sideband. |
 | RTL-SDR | `driver=rtlsdr` | 2.048 or 2.4 MS/s | The exact rate limits depend on the tuner/driver. |
 
-After loading the SoapySDR source and stopping capture, choose a rate from
-**Tweaks → Sample rate**. The selector is disabled while capture is running;
-the device may round or reject rates that it does not support.
+Choose the preferred rate from **Tweaks → Sample rate** while capture is
+stopped. This menu is available even before a device is selected or after a
+device open fails; the selected rate is saved and applied the next time the
+SoapySDR source opens. If a SoapySDR device is already loaded, the change is
+applied immediately. The device may round or reject rates that it does not
+support, so start with a rate listed for your device above.
 
 Implementation notes
 --------------------

@@ -2,7 +2,6 @@ name: Build Tempest SoapySDR
 
 on:
   push:
-    branches: [master]
   pull_request:
     branches: [master]
 
@@ -10,6 +9,58 @@ permissions:
   contents: read
 
 jobs:
+  windows:
+    runs-on: windows-2022
+
+    defaults:
+      run:
+        shell: msys2 {0}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up MSYS2 with SoapySDR
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            make
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-pkgconf
+            mingw-w64-ucrt-x86_64-soapysdr
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build Windows application bundle
+        run: |
+          export JAVA_HOME="$(cygpath -u "$JAVA_HOME")"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          make -C JavaGUI clean all \
+            OSNAME=WINDOWS ARCHNAME=X64 \
+            WITH_SOAPY=1 \
+            JAVA_HOME="$JAVA_HOME"
+
+      - name: Verify Windows artifacts
+        run: |
+          export JAVA_HOME="$(cygpath -u "$JAVA_HOME")"
+          export PATH="$JAVA_HOME/bin:$PATH"
+          test -f JavaGUI/JTempestSDR.jar
+          jar tf JavaGUI/JTempestSDR.jar | grep -F 'lib/WINDOWS/X64/TSDRLibraryNDK.dll'
+          jar tf JavaGUI/JTempestSDR.jar | grep -F 'lib/WINDOWS/X64/TSDRPlugin_Soapy.dll'
+
+      - name: Upload Windows build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tempest-soapy-windows-x64
+          if-no-files-found: error
+          path: JavaGUI/JTempestSDR.jar
+
   linux:
     runs-on: ubuntu-24.04
 
