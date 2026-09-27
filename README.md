@@ -1,6 +1,8 @@
 TempestSDR
 ==========
 
+> This repository is a fork of [Martin Marinov's TempestSDR](https://github.com/martinmarinov/TempestSDR). It exists to maintain the changes needed to build and use TempestSDR with SoapySDR devices, including RTL-SDR and SDRplay hardware, on Linux and Windows. The original project and its broader history are preserved in the upstream repository; this fork focuses on the SoapySDR-enabled build.
+
 [![Build](https://github.com/still-silly/Tempest-SoapySDR/actions/workflows/build.yml/badge.svg)](https://github.com/still-silly/Tempest-SoapySDR/actions/workflows/build.yml)
 
 Quick links: [latest Linux and Windows builds](#latest-builds) · [SoapySDR setup](#soapysdr-prototype) · [build instructions](#building-the-executable)
