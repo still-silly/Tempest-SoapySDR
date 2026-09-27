@@ -69,9 +69,12 @@ Useful starting points by device:
 | SDRplay RSP1A | `driver=sdrplay` | 2 MS/s, then 4/6/8 MS/s if accepted | Keep bandwidth wide enough for the display sideband. |
 | RTL-SDR | `driver=rtlsdr` | 2.048 or 2.4 MS/s | The exact rate limits depend on the tuner/driver. |
 
-After loading the SoapySDR source and stopping capture, choose a rate from
-**Tweaks → Sample rate**. The selector is disabled while capture is running;
-the device may round or reject rates that it does not support.
+Choose the preferred rate from **Tweaks → Sample rate** while capture is
+stopped. This menu is available even before a device is selected or after a
+device open fails; the selected rate is saved and applied the next time the
+SoapySDR source opens. If a SoapySDR device is already loaded, the change is
+applied immediately. The device may round or reject rates that it does not
+support, so start with a rate listed for your device above.
 
 Implementation notes
 --------------------
