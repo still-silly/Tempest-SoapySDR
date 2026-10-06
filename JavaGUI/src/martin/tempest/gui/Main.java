@@ -97,7 +97,20 @@ public class Main implements TSDRLibrary.FrameReadyCallback, TSDRLibrary.Incomin
 	
 	private final static int FRAMERATE_SIGNIFICANT_FIGURES = 8;
 	private final static long FREQUENCY_STEP = 5000000;
-	private final static long[] SAMPLE_RATES = new long[] {2000000L, 2048000L, 2400000L, 4000000L, 6000000L, 8000000L};
+	/*
+	 * Fixed presets based on SoapySDRPlay3's supported-rate list, plus 2.4 MS/s
+	 * for RTL-SDR compatibility and the driver's 10.66 MS/s upper endpoint.
+	 * This is deliberately not device enumeration: the menu is available before
+	 * a device is opened, and each backend can still reject rates it does not
+	 * support. Keep the values in Hz because the native plugin API uses integer
+	 * samples/second.
+	 */
+	private final static long[] SAMPLE_RATES = new long[] {
+		62500L, 96000L, 125000L, 192000L, 250000L, 384000L, 500000L,
+		768000L, 1000000L, 2000000L, 2048000L, 2400000L, 3000000L, 4000000L,
+		5000000L, 6000000L, 7000000L, 8000000L, 9000000L, 10000000L,
+		10660000L
+	};
 	
 	private final static double FRAMERATE_MIN_CHANGE = 1.0/Math.pow(10, FRAMERATE_SIGNIFICANT_FIGURES);
 	private final static String FRAMERATE_FORMAT = "%."+FRAMERATE_SIGNIFICANT_FIGURES+"f";
